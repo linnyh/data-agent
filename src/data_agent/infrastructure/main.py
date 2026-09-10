@@ -30,7 +30,13 @@ from data_agent.infrastructure.storage import SessionStorage
 
 
 async def build_application():
-    data_dir = Path(os.environ.get("DATA_AGENT_DATA_DIR", "./data")).resolve()
+    # 数据目录锚定仓库根（与 .env 读取一致），不依赖进程启动目录
+    data_dir = Path(
+        os.environ.get(
+            "DATA_AGENT_DATA_DIR",
+            str(Path(__file__).resolve().parents[3] / "data"),
+        )
+    ).resolve()
     data_dir.mkdir(parents=True, exist_ok=True)
 
     db = Database(data_dir / "app.db")

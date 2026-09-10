@@ -81,7 +81,10 @@ export default function Chat() {
   };
 
   const onUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!current) return;
+    if (!current) {
+      setError("请先创建或选择一个会话，再上传文件");
+      return;
+    }
     const list = Array.from(e.target.files || []);
     e.target.value = "";
     for (const f of list) {
@@ -258,13 +261,20 @@ export default function Chat() {
             </p>
           )}
           <div className="flex items-center gap-2.5">
-            <label className="cursor-pointer rounded-lg border border-edge bg-ink/50 px-3.5 py-2.5 font-mono text-sm text-slate-300 transition hover:border-cyan-400/40 hover:text-cyan-300">
+            <label
+              className={`cursor-pointer rounded-lg border border-edge bg-ink/50 px-3.5 py-2.5 font-mono text-sm transition ${
+                current && !thinking
+                  ? "text-slate-300 hover:border-cyan-400/40 hover:text-cyan-300"
+                  : "cursor-not-allowed text-slate-600"
+              }`}
+            >
               ⇪ 上传
               <input
                 type="file"
                 multiple
                 className="hidden"
                 onChange={onUpload}
+                disabled={!current || thinking}
                 accept=".csv,.json,.db,.sqlite,.sqlite3,.md,.markdown,.txt,.pdf,.mp4"
               />
             </label>
