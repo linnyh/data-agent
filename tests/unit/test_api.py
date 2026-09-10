@@ -236,6 +236,53 @@ def test_user_isolation(client: TestClient):
     assert r404.status_code == 404
 
 
+def test_files_list_and_delete(tmp_path: Path):
+    """文件列表端点 + 按路径删除：列表随上传/删除更新；路径穿越被拒。"""
+    graph = PipelineGraphBuilder(
+        solver=FakeSolver(),
+        doc_extractor=FakeDocExtractor(),
+        video_preprocessor=FakeVideoPreprocessor(),
+        llm=FakeLLM(need_clarification=False),
+    ).build()
+    db = _make_db(tmp_path / "app.db")
+    storage = SessionStorage(tmp_path / "sessions")
+    app = create_app(db=db, storage=storage, graph=graph)
+
+    with TestClient(app) as c:
+        alice = _register(c, "alice")
+        h = _auth_headers(alice["token"])
+        sid = c.post("/sessions", headers=h).json()["session_id"]
+
+        # 空列表
+        empty = c.get(f"/sessions/{sid}/files", headers=h)
+        assert empty.status_code == 200
+        assert empty.json()["files"] == []
+
+        up = c.post(
+            f"/sessions/{sid}/upload",
+            headers=h,
+            files={"file": ("t.csv", b"id,value\n1,10\n", "text/csv")},
+        )
+        assert up.status_code == 200
+        csv_path = tmp_path / "sessions" / sid / "context" / "csv" / "t.csv"
+        assert csv_path.exists()
+
+        # 列表反映上传（路径相对会话目录）
+        lst = c.get(f"/sessions/{sid}/files", headers=h).json()["files"]
+        assert [f["filename"] for f in lst] == ["t.csv"]
+        assert lst[0]["path"] == "context/csv/t.csv"
+
+        # 按路径删除
+        r = c.delete(f"/sessions/{sid}/files", headers=h, params={"path": "context/csv/t.csv"})
+        assert r.status_code == 200
+        assert not csv_path.exists()
+        assert c.get(f"/sessions/{sid}/files", headers=h).json()["files"] == []
+
+        # 路径穿越拒绝
+        evil = c.delete(f"/sessions/{sid}/files", headers=h, params={"path": "../t.csv"})
+        assert evil.status_code == 400
+
+
 def _make_db(path: Path) -> Database:
     db = Database(path)
     db.connect()
