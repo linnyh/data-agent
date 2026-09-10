@@ -53,6 +53,7 @@ asr_models/
 
 # ---- Data / outputs / runtime artifacts ----
 data/
+dataset/
 outputs/
 output/
 results/
@@ -70,3 +71,4 @@ tmp/
 # ---- 前端 ----
 node_modules/
 web/dist/
+*.tsbuildinfo

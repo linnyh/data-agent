@@ -7,6 +7,7 @@
 - 术语与领域模型：`CONTEXT.md`
 - 架构决策记录：`docs/adr/`（0001 框架选择 / 0002 架构边界 / 0003 认证 / 0004 交互边界 / 0005 历史事实源）
 - **设计文档（方案与设计思路）**：`docs/DESIGN.md`
+- Agent skills 配置（issue 追踪 / triage 标签 / 域文档约定）：`CLAUDE.md`、`docs/agents/`
 
 ## 架构
 
@@ -59,7 +60,9 @@ tests/                # 单测 + 冒烟 + 标注集（benchmark/）
 uv sync
 cd web && npm install && npm run build && cd ..
 
-# 模型配置写在 .env（已 gitignore）：MODEL_API_URL / MODEL_API_KEY / MODEL_NAME
+# 配置写在 .env（已 gitignore）：
+#   模型：MODEL_API_URL / MODEL_API_KEY / MODEL_NAME（必填）
+#   服务：DATA_AGENT_PORT（默认 8000）/ DATA_AGENT_DATA_DIR（默认 ./data）
 python -m data_agent.infrastructure.main    # 浏览器打开 http://localhost:8000
 ```
 
@@ -94,7 +97,7 @@ uv run python scripts/chat_cli.py --files 数据.csv    # 或进入后 /upload <
 ## 测试
 
 ```bash
-uv run pytest tests/ -q          # 全量（77 测试 + 2 xfail）
+uv run pytest tests/ -q          # 全量（87 测试）
 ```
 
 覆盖：领域模型 / DuckDB 与内置参考实现逐字节对齐 / 投票聚合语义 / 求解沙箱三态 /
