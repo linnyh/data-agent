@@ -11,8 +11,9 @@ export type ResultEvent = {
   attempts: number;
 };
 export type ClarificationEvent = { type: "clarification"; question: string };
+export type ProgressEvent = { type: "progress"; stage: string };
 export type ErrorEvent = { type: "error"; detail: string };
-export type ChatEvent = ResultEvent | ClarificationEvent | ErrorEvent;
+export type ChatEvent = ResultEvent | ClarificationEvent | ProgressEvent | ErrorEvent;
 
 export type HistoryRecord = {
   question: string;

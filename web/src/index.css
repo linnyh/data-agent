@@ -1,1 +1,175 @@
 @import "tailwindcss";
+
+@theme {
+  --font-sans: "Space Grotesk", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --color-ink: #05070d;
+  --color-panel: #0a1122;
+  --color-edge: #1b2942;
+
+  --animate-fade-up: fade-up 0.35s ease-out both;
+  --animate-blink: blink 1.1s step-end infinite;
+  --animate-scan: scan 1.6s linear infinite;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes scan {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(320%);
+  }
+}
+
+@keyframes drift-a {
+  from {
+    transform: translate(0, 0);
+  }
+  to {
+    transform: translate(140px, 80px);
+  }
+}
+
+@keyframes drift-b {
+  from {
+    transform: translate(0, 0);
+  }
+  to {
+    transform: translate(-160px, -90px);
+  }
+}
+
+body {
+  background: var(--color-ink);
+  color: #dbe4f3;
+}
+
+/* 透视网格 + 径向渐隐 */
+.bg-grid {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background-image: linear-gradient(rgba(56, 189, 248, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(56, 189, 248, 0.045) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(ellipse 100% 90% at 50% 10%, black 25%, transparent 78%);
+}
+
+/* 漂移光斑 */
+.orb {
+  position: fixed;
+  z-index: -1;
+  border-radius: 50%;
+  filter: blur(110px);
+  pointer-events: none;
+}
+
+.orb-a {
+  width: 520px;
+  height: 520px;
+  top: -180px;
+  left: 6%;
+  background: rgba(34, 211, 238, 0.14);
+  animation: drift-a 24s ease-in-out infinite alternate;
+}
+
+.orb-b {
+  width: 620px;
+  height: 620px;
+  right: 2%;
+  bottom: -240px;
+  background: rgba(139, 92, 246, 0.15);
+  animation: drift-b 28s ease-in-out infinite alternate;
+}
+
+/* 深色滚动条 */
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #14253f;
+  border-radius: 5px;
+  border: 2px solid var(--color-ink);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #1e3a5f;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #14253f transparent;
+}
+
+::selection {
+  background: rgba(34, 211, 238, 0.28);
+}
+
+/* 青→紫渐变文字 */
+.text-gradient {
+  background: linear-gradient(100deg, #22d3ee 10%, #60a5fa 55%, #a78bfa 90%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* 主按钮：青蓝紫渐变 + 霓虹光晕 */
+.btn-primary {
+  background: linear-gradient(120deg, #06b6d4, #3b82f6 60%, #7c3aed);
+  box-shadow: 0 0 18px rgba(34, 211, 238, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  transition: box-shadow 0.25s ease, filter 0.25s ease;
+}
+
+.btn-primary:hover:not(:disabled) {
+  box-shadow: 0 0 28px rgba(34, 211, 238, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  filter: brightness(1.08);
+}
+
+/* 扫描线（思考指示器内） */
+.scanline {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.scanline::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 45%;
+  background: linear-gradient(90deg, transparent, rgba(34, 211, 238, 0.4), transparent);
+  animation: scan 1.6s linear infinite;
+}

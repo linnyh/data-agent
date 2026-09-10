@@ -10,6 +10,7 @@ import {
   toCsv,
   uploadFile,
 } from "./api";
+import Logo from "./Logo";
 
 type Message =
   | { kind: "user"; text: string }
@@ -26,6 +27,7 @@ export default function Chat() {
   const [input, setInput] = useState("");
   const [pendingClarify, setPendingClarify] = useState<string | null>(null);
   const [thinking, setThinking] = useState(false);
+  const [stage, setStage] = useState<string | null>(null);
   const [error, setError] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -97,6 +99,7 @@ export default function Chat() {
     if (!current || !question.trim() || thinking) return;
     setInput("");
     setError("");
+    setStage(null);
     setThinking(true);
     // resume 分支：question 即用户对澄清的回答，同样入消息流
     setMessages((m) => [...m, { kind: "user", text: question }]);
@@ -108,6 +111,8 @@ export default function Chat() {
           setMessages((m) => [...m, { kind: "agent", text: ev.question }]);
         } else if (ev.type === "result") {
           setMessages((m) => [...m, { kind: "result", data: ev }]);
+        } else if (ev.type === "progress") {
+          setStage(ev.stage);
         } else {
           setError(ev.detail);
         }
@@ -131,34 +136,41 @@ export default function Chat() {
   };
 
   return (
-    <div className="h-screen flex bg-slate-50">
+    <div className="flex h-screen">
       {/* 左侧会话栏 */}
-      <aside className="w-56 bg-white border-r flex flex-col">
-        <div className="p-3 border-b flex items-center justify-between">
-          <span className="font-semibold text-sm">数据分析 Agent</span>
+      <aside className="flex w-60 shrink-0 flex-col border-r border-edge bg-panel/60 backdrop-blur-xl">
+        <div className="flex items-center justify-between border-b border-edge p-4">
+          <div className="flex items-center gap-2.5">
+            <Logo className="h-6 w-6" />
+            <span className="text-[15px] font-bold tracking-wide">
+              <span className="text-gradient">数据分析 Agent</span>
+            </span>
+          </div>
           <button
             onClick={() => {
               clearToken();
               window.dispatchEvent(new Event("da:unauthorized"));
             }}
-            className="text-xs text-slate-400 hover:text-slate-600"
+            className="text-xs text-slate-500 transition hover:text-cyan-300"
           >
             退出
           </button>
         </div>
         <button
           onClick={newSession}
-          className="m-3 py-2 rounded bg-slate-800 text-white text-sm"
+          className="btn-primary m-3 rounded-lg py-2 text-sm font-semibold text-white"
         >
           + 新建会话
         </button>
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto px-2 pb-2">
           {sessions.map((sid) => (
             <button
               key={sid}
               onClick={() => openSession(sid)}
-              className={`w-full text-left px-4 py-2 text-sm truncate ${
-                current === sid ? "bg-slate-100 font-medium" : "hover:bg-slate-50"
+              className={`w-full truncate border-l-2 px-3 py-2.5 text-left font-mono text-[13px] transition ${
+                current === sid
+                  ? "border-cyan-400 bg-cyan-400/10 text-cyan-200"
+                  : "border-transparent text-slate-500 hover:bg-white/[0.04] hover:text-slate-200"
               }`}
             >
               {sid.slice(0, 12)}
@@ -168,13 +180,16 @@ export default function Chat() {
       </aside>
 
       {/* 右侧聊天区 */}
-      <main className="flex-1 flex flex-col">
+      <main className="flex min-w-0 flex-1 flex-col">
         {/* 文件标签 */}
         {current && files.length > 0 && (
-          <div className="px-4 py-2 bg-white border-b flex gap-2 items-center text-xs">
-            <span className="text-slate-400">数据文件:</span>
+          <div className="flex items-center gap-2 border-b border-edge bg-panel/40 px-4 py-2.5 text-xs backdrop-blur">
+            <span className="text-slate-500">数据文件:</span>
             {files.map((f) => (
-              <span key={f} className="px-2 py-0.5 rounded bg-blue-50 text-blue-700">
+              <span
+                key={f}
+                className="rounded-md border border-cyan-400/20 bg-cyan-400/10 px-2.5 py-1 font-mono text-cyan-300"
+              >
                 {f}
               </span>
             ))}
@@ -182,23 +197,31 @@ export default function Chat() {
         )}
 
         {/* 消息流 */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        <div className="flex-1 space-y-5 overflow-y-auto px-5 py-6">
           {messages.length === 0 && !thinking && (
-            <div className="text-center text-slate-400 text-sm mt-20">
-              上传数据文件后，输入你的分析问题开始对话
+            <div className="mt-24 flex flex-col items-center text-center">
+              <Logo className="h-16 w-16 opacity-80" />
+              <p className="mt-5 text-sm text-slate-400">
+                上传数据文件后，输入你的分析问题开始对话
+              </p>
+              <p className="mt-2 font-mono text-[11px] tracking-[0.25em] text-slate-600">
+                CSV · JSON · SQLITE · PDF · MP4
+              </p>
             </div>
           )}
           {messages.map((m, i) =>
             m.kind === "user" ? (
-              <div key={i} className="flex justify-end">
-                <div className="max-w-[75%] bg-slate-800 text-white rounded-lg px-4 py-2 text-sm whitespace-pre-wrap">
+              <div key={i} className="flex animate-fade-up justify-end">
+                <div className="max-w-[75%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-gradient-to-br from-cyan-500 to-blue-600 px-4 py-2.5 text-sm text-white shadow-[0_0_22px_rgba(34,211,238,0.25)]">
                   {m.text}
                 </div>
               </div>
             ) : m.kind === "agent" ? (
-              <div key={i} className="flex justify-start">
-                <div className="max-w-[75%] bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm">
-                  <p className="text-amber-700 font-medium mb-1">🤔 Agent 需要确认</p>
+              <div key={i} className="flex animate-fade-up justify-start">
+                <div className="max-w-[75%] rounded-2xl rounded-bl-md border border-amber-400/25 bg-amber-400/[0.08] px-4 py-3 text-sm text-amber-100/90 shadow-[0_0_18px_rgba(251,191,36,0.07)]">
+                  <p className="mb-1 text-xs font-semibold tracking-wide text-amber-300">
+                    🤔 AGENT 需要确认
+                  </p>
                   {m.text}
                 </div>
               </div>
@@ -208,25 +231,35 @@ export default function Chat() {
           )}
           {thinking && (
             <div className="flex justify-start">
-              <div className="bg-white border rounded-lg px-4 py-2 text-sm text-slate-400 animate-pulse">
-                Agent 思考中…
+              <div className="relative overflow-hidden rounded-2xl rounded-bl-md border border-cyan-400/20 bg-panel/80 px-4 py-2.5 font-mono text-sm text-cyan-300/80 shadow-[0_0_18px_rgba(34,211,238,0.08)]">
+                {stage ? (
+                  <>
+                    <span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
+                    {stage}…<span className="animate-blink">▍</span>
+                  </>
+                ) : (
+                  <>
+                    Agent 思考中<span className="animate-blink">▍</span>
+                  </>
+                )}
+                <span className="scanline" />
               </div>
             </div>
           )}
-          {error && <p className="text-red-600 text-sm">{error}</p>}
+          {error && <p className="px-1 font-mono text-sm text-red-400">⚠ {error}</p>}
           <div ref={bottomRef} />
         </div>
 
         {/* 输入区 */}
-        <div className="border-t bg-white p-3">
+        <div className="border-t border-edge bg-panel/60 p-3.5 backdrop-blur-xl">
           {pendingClarify && (
-            <p className="text-xs text-amber-600 mb-2">
-              请回答 Agent 的问题后发送（将作为澄清继续分析）
+            <p className="mb-2 font-mono text-xs text-amber-300/90">
+              ▸ 请回答 Agent 的问题后发送（将作为澄清继续分析）
             </p>
           )}
-          <div className="flex gap-2 items-center">
-            <label className="px-3 py-2 border rounded text-sm text-slate-600 hover:bg-slate-50 cursor-pointer">
-              上传文件
+          <div className="flex items-center gap-2.5">
+            <label className="cursor-pointer rounded-lg border border-edge bg-ink/50 px-3.5 py-2.5 font-mono text-sm text-slate-300 transition hover:border-cyan-400/40 hover:text-cyan-300">
+              ⇪ 上传
               <input
                 type="file"
                 multiple
@@ -236,7 +269,7 @@ export default function Chat() {
               />
             </label>
             <input
-              className="flex-1 border rounded px-3 py-2 text-sm"
+              className="flex-1 rounded-lg border border-edge bg-ink/60 px-3.5 py-2.5 text-sm transition placeholder:text-slate-500 focus:border-cyan-400/60 focus:shadow-[0_0_18px_rgba(34,211,238,0.12)] focus:outline-none"
               placeholder={
                 pendingClarify
                   ? "回答 Agent 的问题…"
@@ -257,7 +290,7 @@ export default function Chat() {
             <button
               onClick={() => send(input, pendingClarify ? input : undefined)}
               disabled={!current || thinking || !input.trim()}
-              className="px-4 py-2 rounded bg-slate-800 text-white text-sm disabled:opacity-40"
+              className="btn-primary rounded-lg px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-35 disabled:shadow-none"
             >
               发送
             </button>
@@ -272,10 +305,13 @@ function ResultBubble({ data, onDownload }: { data: ResultEvent; onDownload: () 
   const rows = data.rows.slice(0, MAX_TABLE_ROWS);
   const total = data.total_rows ?? data.rows.length;
   return (
-    <div className="flex justify-start">
-      <div className="max-w-[85%] bg-white border rounded-lg overflow-hidden">
-        <div className="px-4 py-3 border-b bg-slate-50">
-          <p className="text-sm text-slate-800 whitespace-pre-wrap">
+    <div className="flex animate-fade-up justify-start">
+      <div className="max-w-[88%] min-w-0 overflow-hidden rounded-2xl rounded-bl-md border border-edge bg-panel/85 shadow-[0_0_30px_rgba(0,0,0,0.35)] backdrop-blur-xl">
+        <div className="border-b border-edge/70 px-4 py-3.5">
+          <p className="mb-1.5 font-mono text-[10px] tracking-[0.3em] text-cyan-400/70">
+            RESULT
+          </p>
+          <p className="whitespace-pre-wrap text-sm text-slate-200">
             {data.narration || "（无叙述）"}
           </p>
         </div>
@@ -286,7 +322,10 @@ function ResultBubble({ data, onDownload }: { data: ResultEvent; onDownload: () 
                 <thead>
                   <tr>
                     {data.columns.map((c) => (
-                      <th key={c} className="px-3 py-2 text-left bg-slate-100 border-b font-medium">
+                      <th
+                        key={c}
+                        className="border-b border-cyan-400/15 bg-[#0a1526] px-3.5 py-2.5 text-left font-mono text-xs font-medium tracking-wide text-cyan-300"
+                      >
                         {c}
                       </th>
                     ))}
@@ -294,11 +333,14 @@ function ResultBubble({ data, onDownload }: { data: ResultEvent; onDownload: () 
                 </thead>
                 <tbody>
                   {rows.map((r, i) => (
-                    <tr key={i} className="border-b last:border-0">
+                    <tr
+                      key={i}
+                      className="border-b border-white/[0.04] transition last:border-0 odd:bg-white/[0.02] hover:bg-cyan-400/[0.05]"
+                    >
                       {data.columns.map((_, j) => (
-                        <td key={j} className="px-3 py-1.5 text-slate-700">
+                        <td key={j} className="px-3.5 py-2 font-mono text-[13px] text-slate-300">
                           {r[j] === null || r[j] === undefined ? (
-                            <span className="text-slate-300">NULL</span>
+                            <span className="text-slate-600">NULL</span>
                           ) : (
                             String(r[j])
                           )}
@@ -309,13 +351,13 @@ function ResultBubble({ data, onDownload }: { data: ResultEvent; onDownload: () 
                 </tbody>
               </table>
             </div>
-            <div className="px-4 py-2 flex items-center justify-between text-xs text-slate-400">
-              <span>
+            <div className="flex items-center justify-between border-t border-edge/70 px-4 py-2.5">
+              <span className="font-mono text-xs text-slate-500">
                 共 {total} 行{total > MAX_TABLE_ROWS ? `（仅显示前 ${MAX_TABLE_ROWS} 行）` : ""}
               </span>
               <button
                 onClick={onDownload}
-                className="px-2 py-1 rounded border hover:bg-slate-50 text-slate-600"
+                className="rounded-md border border-cyan-400/30 px-2.5 py-1 text-xs text-cyan-300 transition hover:bg-cyan-400/10"
               >
                 下载 CSV
               </button>
