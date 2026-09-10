@@ -222,7 +222,7 @@ export default function Chat() {
           <div className="flex items-center gap-2.5">
             <Logo className="h-6 w-6" />
             <span className="text-[15px] font-bold tracking-wide">
-              <span className="text-gradient">数据分析 Agent</span>
+              <span className="text-gradient">数枢</span>
             </span>
           </div>
           <button

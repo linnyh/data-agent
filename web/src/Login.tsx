@@ -35,10 +35,10 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
           <Logo className="h-14 w-14" />
         </div>
         <h1 className="mb-1 text-center text-2xl font-bold">
-          <span className="text-gradient">数据分析 Agent</span>
+          <span className="text-gradient">数枢</span>
         </h1>
         <p className="mb-8 text-center font-mono text-[11px] tracking-[0.3em] text-fg-faint">
-          DATA ANALYSIS AGENT
+          DATAPIVOT
         </p>
 
         <div className="mb-6 flex rounded-lg border border-edge bg-ink/60 p-1">

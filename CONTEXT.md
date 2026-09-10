@@ -1,6 +1,6 @@
-# Data Agent
+# 数枢（DataPivot）
 
-对话式数据分析 Agent：用户上传数据并与 Agent 多轮对话，Agent 自动完成分析并给出叙述解读与结构化结果。由早期数据分析管线以 LangGraph 重构而来。
+数枢是一个对话式数据分析 Agent：用户上传数据并与 Agent 多轮对话，Agent 自动完成分析并给出叙述解读与结构化结果。由早期数据分析管线以 LangGraph 重构而来。
 
 ## Language
 

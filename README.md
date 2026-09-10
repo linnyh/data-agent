@@ -1,4 +1,4 @@
-# Data Agent — 对话式数据分析 Agent
+# 数枢 DataPivot — 对话式数据分析 Agent
 
 基于 **LangGraph** 的对话式数据分析服务：用户上传数据（csv/json/sqlite/文档/视频简报）
 → 与 Agent 多轮对话澄清需求 → Agent 全自动执行分析（结构化 SQL + 文档抽取 + 视频多模态

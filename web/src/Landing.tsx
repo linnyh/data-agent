@@ -55,7 +55,7 @@ export default function Landing({
       <div className="flex flex-1 flex-col items-center justify-center px-5 pb-10">
         <Logo className="h-14 w-14" />
         <h1 className="mt-5 text-4xl font-bold">
-          <span className="text-gradient">数据分析 Agent</span>
+          <span className="text-gradient">数枢</span>
         </h1>
         <p className="mt-3 text-sm text-fg-muted">上传数据，用自然语言完成分析</p>
         <p className="mt-2 font-mono text-[11px] tracking-[0.25em] text-fg-faint">

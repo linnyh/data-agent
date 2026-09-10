@@ -1,6 +1,6 @@
-# Data Agent 设计文档
+# 数枢（DataPivot）设计文档
 
-> 对话式数据分析 Agent（LangGraph 重构版）的完整设计说明。
+> 数枢 —— 对话式数据分析 Agent（LangGraph 重构版）的完整设计说明。
 > 本文以"**为什么这么设计**"为主线；术语见 `CONTEXT.md`，决策记录见 `docs/adr/`，
 > 实施过程见 `docs/implementation-plan.md`，早期实现原文档见 `docs/TECHNICAL_ARCHITECTURE.md`。
 

@@ -1,4 +1,4 @@
-"""终端对话 CLI：上传数据后与数据分析 Agent 多轮对话。
+"""终端对话 CLI：上传数据后与数枢（数据分析 Agent）多轮对话。
 
 用法:
     export MODEL_API_URL="https://api.deepseek.com"
@@ -40,7 +40,7 @@ from data_agent.infrastructure.storage import classify_file
 
 def _banner(session_dir: Path, files: list[Path]) -> None:
     print("=" * 60)
-    print("数据分析 Agent 对话模式 (LangGraph 重构版)")
+    print("数枢对话模式 (LangGraph 重构版)")
     print(f"会话目录: {session_dir}")
     if files:
         print("已上传:")
