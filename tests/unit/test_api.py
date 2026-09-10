@@ -32,7 +32,7 @@ class FakeLLM:
 
 
 class FakeSolver:
-    async def solve(self, *, goal, task_dir, knowledge="", max_attempts=5) -> SolveOutcome:
+    async def solve(self, *, goal, task_dir, knowledge="", history="", max_attempts=5) -> SolveOutcome:
         return SolveOutcome(
             status="ok",
             result=Result(
@@ -136,6 +136,10 @@ def test_full_chat_flow(client: TestClient):
     events = _sse_events(r.text)
     assert events[-1]["type"] == "result"
     assert events[-1]["rows"] == [[1], [2]]
+    # 执行阶段进度事件（节点级，最后一个为 narrate）
+    stages = [e["stage"] for e in events if e["type"] == "progress"]
+    assert stages, "应推送 progress 阶段事件"
+    assert stages[-1] == "生成结果解读"
 
     # result 端点
     rr = client.get(f"/sessions/{sid}/result", headers=h)

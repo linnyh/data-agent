@@ -18,6 +18,7 @@ class PipelineState(TypedDict, total=False):
     goal: AnalysisGoal
     task_dir: str
     knowledge: str
+    history: str
 
     # 澄清（管线前的人机交互，ADR-0004）
     clarification: Clarification | None

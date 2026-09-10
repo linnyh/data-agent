@@ -120,6 +120,19 @@ def create_app(
 
     # -- 对话 ----------------------------------------------------------------
 
+    # 节点 → 用户可见阶段名（SSE progress 事件）
+    _STAGE_LABELS = {
+        "load_context": "加载上下文",
+        "clarify": "理解需求",
+        "video_preprocess": "视频预处理",
+        "video_result": "视频内容分析",
+        "doc_relevance": "筛选相关文档",
+        "doc_extract": "文档结构化抽取",
+        "table_relevance": "筛选数据表",
+        "solve": "执行分析求解",
+        "narrate": "生成结果解读",
+    }
+
     @app.post("/sessions/{session_id}/chat")
     def chat(
         session_id: str,
@@ -139,22 +152,33 @@ def create_app(
                 if req.resume is not None:
                     from langgraph.types import Command
 
-                    result = await graph.ainvoke(Command(resume=req.resume), config=config)
+                    stream_input: object = Command(resume=req.resume)
                 else:
-                    result = await graph.ainvoke(
-                        {"goal": goal, "task_dir": str(sdir), "session_id": session_id},
-                        config=config,
-                    )
-                if "__interrupt__" in result:
-                    intr = result["__interrupt__"][0]
-                    clar = intr.value.get("clarification")
+                    stream_input = {
+                        "goal": goal,
+                        "task_dir": str(sdir),
+                        "session_id": session_id,
+                    }
+                # 逐节点流式：每个节点完成推一条 progress（用户可见执行阶段）
+                async for chunk in graph.astream(
+                    stream_input, config=config, stream_mode="updates"
+                ):
+                    node = next(iter(chunk))
+                    if node == "__interrupt__":
+                        intr = chunk["__interrupt__"][0]
+                        clar = intr.value.get("clarification")
+                        yield _ev(
+                            {
+                                "type": "clarification",
+                                "question": clar.question if clar else "",
+                            }
+                        )
+                        return
                     yield _ev(
-                        {
-                            "type": "clarification",
-                            "question": clar.question if clar else "",
-                        }
+                        {"type": "progress", "stage": _STAGE_LABELS.get(node, node)}
                     )
-                    return
+                snapshot = await graph.aget_state(config)
+                result = snapshot.values
                 outcome = result.get("outcome")
                 if outcome is not None and outcome.result is not None:
                     yield _ev(

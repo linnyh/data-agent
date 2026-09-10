@@ -29,6 +29,9 @@ CLARIFY_SYSTEM = """你是数据分析 Agent 的前置意图识别助手。对�
 3. 两者皆否: 是明确的数据分析请求, 直接执行(轻微模糊不影响执行时宁可不问)。
 
 输出规则: is_chitchat 与 need_clarification 不能同时为 true。
+
+会话历史(如有)记录了此前轮次的问答。闲聊时自然衔接历史;
+判断歧义时用历史理解指代(如"换个口径"指的是什么), 不要重复问历史已澄清过的口径。
 """
 
 
@@ -51,12 +54,16 @@ class ClarifyDecision(BaseModel):
     )
 
 
-def _clarify_user(goal: AnalysisGoal, knowledge: str, context_preview: str) -> str:
+def _clarify_user(
+    goal: AnalysisGoal, knowledge: str, context_preview: str, history: str = ""
+) -> str:
     kn = (knowledge or "").strip()[:4000]
+    hist = (history or "").strip()[:3000]
     return (
         f"## 分析目标\n{goal.text}\n\n"
         f"## knowledge\n{kn or '(无)'}\n\n"
-        f"## 数据集结构预览\n{context_preview or '(未提供)'}"
+        f"## 数据集结构预览\n{context_preview or '(未提供)'}\n\n"
+        f"{hist or '## 会话历史\n(无)'}"
     )
 
 
@@ -74,7 +81,7 @@ async def clarify_node(
     try:
         decision = await llm.complete_structured(
             system=CLARIFY_SYSTEM,
-            user=_clarify_user(goal, knowledge, context_preview),
+            user=_clarify_user(goal, knowledge, context_preview, state.get("history", "")),
             schema=ClarifyDecision,
         )
     except Exception:

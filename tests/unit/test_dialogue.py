@@ -22,9 +22,11 @@ class FakeLLM:
         self.question = question
         self.clarify_calls = 0
         self.narrate_calls = 0
+        self.clarify_users: list[str] = []
 
     async def complete_structured(self, *, system: str, user: str, schema):
         self.clarify_calls += 1
+        self.clarify_users.append(user)
         return schema(
             need_clarification=self.need_clarification,
             question=self.question,
@@ -38,9 +40,11 @@ class FakeLLM:
 class FakeSolver:
     def __init__(self):
         self.calls: list[str] = []
+        self.histories: list[str] = []
 
-    async def solve(self, *, goal, task_dir, knowledge="", max_attempts=5) -> SolveOutcome:
+    async def solve(self, *, goal, task_dir, knowledge="", history="", max_attempts=5) -> SolveOutcome:
         self.calls.append(goal.text)
+        self.histories.append(history)
         return SolveOutcome(
             status="ok",
             result=Result(
@@ -146,6 +150,40 @@ def test_followup_reuses_checkpoint_skips_preprocessing(task_dir: Path):
     # clarify 每轮都跑（管线前的交互），narrate 每轮都跑
     assert llm.clarify_calls == 2
     assert llm.narrate_calls == 2
+
+
+def test_multiturn_history_injected_into_clarify_and_solve(task_dir: Path):
+    """多轮记忆：历史从 checkpoint 读回，注入 clarify 与 solver 上下文。"""
+    llm = FakeLLM(need_clarification=False)
+    solver = FakeSolver()
+    graph = _builder(llm, solver).build()
+    config = {"configurable": {"thread_id": "s-mem"}}
+
+    asyncio.run(
+        graph.ainvoke(
+            {
+                "goal": AnalysisGoal(text="列出 value"),
+                "task_dir": str(task_dir),
+                "session_id": "s-mem",
+            },
+            config=config,
+        )
+    )
+    assert solver.histories[-1] == ""  # 第一轮无历史
+
+    asyncio.run(
+        graph.ainvoke(
+            {
+                "goal": AnalysisGoal(text="换个口径重算"),
+                "task_dir": str(task_dir),
+                "session_id": "s-mem",
+            },
+            config=config,
+        )
+    )
+    # 第二轮：clarify 与 solver 都能看到第一轮问答
+    assert "列出 value" in llm.clarify_users[-1]
+    assert "列出 value" in solver.histories[-1]
 
 
 def test_narrate_failure_keeps_result(task_dir: Path):

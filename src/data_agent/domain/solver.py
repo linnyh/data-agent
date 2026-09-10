@@ -63,6 +63,7 @@ class ISolver(Protocol):
         goal: AnalysisGoal,
         task_dir: Path,
         knowledge: str = "",
+        history: str = "",
         max_attempts: int = 5,
     ) -> SolveOutcome:
         """执行求解并返回结果。任何失败不抛异常，以 SolveOutcome 承载。"""

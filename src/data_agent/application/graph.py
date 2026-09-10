@@ -66,6 +66,7 @@ class PipelineGraphBuilder:
         self._table_relevance_judge = table_relevance_judge
         self._video_result_vote_rounds = video_result_vote_rounds
         self._max_attempts = max_attempts
+        self._graph = None
 
     # -- 节点 -----------------------------------------------------------------
 
@@ -85,7 +86,42 @@ class PipelineGraphBuilder:
                 )
         # outcome 置 None：每轮新分析开始清掉上一轮结果
         # （否则 clarify 的条件边会把 checkpoint 里的旧 outcome 误判为本轮产出）
-        return {"goal": goal, "knowledge": knowledge, "outcome": None}
+        history = ""
+        if state.get("session_id"):
+            history = await self._read_history(state["session_id"], goal.text)
+        return {"goal": goal, "knowledge": knowledge, "history": history, "outcome": None}
+
+    async def _read_history(self, session_id: str, current_goal: str) -> str:
+        """从 checkpoint 读历史轮次（ADR-0005 事实源），构造摘要注入本轮。
+
+        每轮一条 `问/答`；跳过进行中快照（outcome=None）与同 goal 的旧轮
+        （resume 复用语义，不算历史）。
+        """
+        if self._graph is None:
+            return ""
+        try:
+            snaps = []
+            async for snap in self._graph.aget_state_history(
+                {"configurable": {"thread_id": session_id}}
+            ):
+                snaps.append(snap)
+        except Exception:
+            return ""
+        lines: list[str] = []
+        for snap in reversed(snaps):  # 快照时间正序
+            s = snap.values
+            g, o = s.get("goal"), s.get("outcome")
+            if g is None or o is None or o.result is None:
+                continue
+            if g.text == current_goal:
+                continue
+            narr = (o.result.narration or "").strip().replace("\n", " ")
+            lines.append(f"- 问: {g.text.strip()[:500]}")
+            if narr:
+                lines.append(f"  答: {narr[:300]}")
+        if not lines:
+            return ""
+        return "## 会话历史（此前轮次的问答，供理解指代与上下文）\n" + "\n".join(lines[-20:])
 
     async def _clarify(self, state: PipelineState) -> dict[str, Any]:
         if self._llm is None:
@@ -189,6 +225,7 @@ class PipelineGraphBuilder:
             goal=state["goal"],
             task_dir=Path(state["task_dir"]),
             knowledge=state.get("knowledge", ""),
+            history=state.get("history", ""),
             max_attempts=self._max_attempts,
         )
         return {"outcome": outcome}
@@ -227,4 +264,5 @@ class PipelineGraphBuilder:
         g.add_edge("table_relevance", "solve")
         g.add_edge("solve", "narrate")
         g.add_edge("narrate", END)
-        return g.compile(checkpointer=checkpointer or MemorySaver())
+        self._graph = g.compile(checkpointer=checkpointer or MemorySaver())
+        return self._graph

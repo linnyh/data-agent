@@ -18,7 +18,7 @@ from data_agent.domain.solver import SolveOutcome
 
 
 class FakeSolver:
-    async def solve(self, *, goal, task_dir, knowledge="", max_attempts=5) -> SolveOutcome:
+    async def solve(self, *, goal, task_dir, knowledge="", history="", max_attempts=5) -> SolveOutcome:
         return SolveOutcome(
             status="ok",
             result=Result(
