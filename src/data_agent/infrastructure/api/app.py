@@ -207,6 +207,7 @@ def create_app(
                             "rows": outcome.result.table.rows,
                             "total_rows": outcome.result.table.total_rows,
                             "attempts": outcome.attempts,
+                            "chart": _chart_payload(outcome.result.chart),
                         }
                     )
                 else:
@@ -240,7 +241,11 @@ def create_app(
             "rows": outcome.result.table.rows,
             "total_rows": outcome.result.table.total_rows,
             "attempts": outcome.attempts,
+            "chart": _chart_payload(outcome.result.chart),
         }
+
+    def _chart_payload(chart) -> dict | None:
+        return chart.model_dump() if chart is not None else None
 
     def _outcome_payload(outcome) -> dict:
         return {
@@ -250,6 +255,7 @@ def create_app(
             "rows": outcome.result.table.rows,
             "total_rows": outcome.result.table.total_rows,
             "attempts": outcome.attempts,
+            "chart": _chart_payload(outcome.result.chart),
         }
 
     @app.get("/sessions/{session_id}/history")

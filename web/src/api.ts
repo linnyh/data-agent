@@ -2,6 +2,13 @@
 
 const TOKEN_KEY = "da_token";
 
+export type ChartSpec = {
+  type: "bar" | "line" | "pie" | "scatter";
+  title: string;
+  x: string[];
+  series: { name: string; data: (number | null)[] }[];
+};
+
 export type ResultEvent = {
   type: "result";
   narration: string;
@@ -9,6 +16,7 @@ export type ResultEvent = {
   rows: unknown[][];
   total_rows: number | null;
   attempts: number;
+  chart?: ChartSpec | null;
 };
 export type ClarificationEvent = { type: "clarification"; question: string };
 export type ProgressEvent = { type: "progress"; stage: string };
@@ -22,6 +30,7 @@ export type HistoryRecord = {
   rows: unknown[][];
   total_rows: number | null;
   status: string;
+  chart?: ChartSpec | null;
 };
 
 let token = localStorage.getItem(TOKEN_KEY) || "";

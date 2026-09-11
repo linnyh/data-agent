@@ -13,6 +13,7 @@ import {
   UploadedFile,
   uploadFile,
 } from "./api";
+import ChartBox from "./ChartBox";
 import Landing from "./Landing";
 import Logo from "./Logo";
 
@@ -80,6 +81,7 @@ export default function Chat() {
               rows: rec.rows,
               total_rows: rec.total_rows,
               attempts: 0,
+              chart: rec.chart ?? null,
             },
           } as Message,
         ]),
@@ -448,6 +450,11 @@ function ResultBubble({ data, onDownload }: { data: ResultEvent; onDownload: () 
             {data.narration || "（无叙述）"}
           </p>
         </div>
+        {data.chart && (
+          <div className="border-b border-edge/70 px-4 py-3">
+            <ChartBox chart={data.chart} />
+          </div>
+        )}
         {data.columns.length > 0 && (
           <>
             <div className="overflow-x-auto">

@@ -25,7 +25,21 @@ class FakeLLM:
         self.need_clarification = need_clarification
 
     async def complete_structured(self, *, system: str, user: str, schema):
-        return schema(need_clarification=self.need_clarification, question="要哪列？")
+        if schema.__name__ == "ClarifyDecision":
+            return schema(need_clarification=self.need_clarification, question="要哪列？")
+        if schema.__name__ == "NarrateDecision":
+            from data_agent.domain.models import ChartSeries, ChartSpec
+
+            return schema(
+                narration="叙述：共 2 行。",
+                chart=ChartSpec(
+                    type="bar",
+                    title="t",
+                    x=["a", "b"],
+                    series=[ChartSeries(name="", data=[1, 2])],
+                ),
+            )
+        raise ValueError(f"unexpected schema: {schema.__name__}")
 
     async def complete_text(self, *, system: str, user: str) -> str:
         return "叙述：共 2 行。"
@@ -136,6 +150,9 @@ def test_full_chat_flow(client: TestClient):
     events = _sse_events(r.text)
     assert events[-1]["type"] == "result"
     assert events[-1]["rows"] == [[1], [2]]
+    # 图表规格随结果事件与历史下发
+    assert events[-1]["chart"]["type"] == "bar"
+    assert events[-1]["chart"]["x"] == ["a", "b"]
     # 执行阶段进度事件（节点级，最后一个为 narrate）
     stages = [e["stage"] for e in events if e["type"] == "progress"]
     assert stages, "应推送 progress 阶段事件"
@@ -199,6 +216,7 @@ def test_session_history(client: TestClient):
     assert [rec["question"] for rec in hist] == ["列出 value", "换个口径重算"]
     assert hist[0]["rows"] == [[1], [2]]
     assert hist[0]["narration"] == "叙述：共 2 行。"
+    assert hist[0]["chart"]["type"] == "bar"
 
     # 隔离：B 不能读 A 的历史
     bob = _register(client, "bob")
