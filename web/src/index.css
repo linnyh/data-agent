@@ -5,19 +5,72 @@
     ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
+  /* 结构色（深色默认值，浅色在 .light 下翻转） */
   --color-ink: #05070d;
   --color-panel: #0a1122;
   --color-edge: #1b2942;
+  /* 文本语义色 */
+  --color-fg: #dbe4f3;
+  --color-fg-strong: #e2e8f0;
+  --color-fg-muted: #94a3b8;
+  --color-fg-faint: #64748b;
+  /* 强调/警示文本 */
+  --color-accent-fg: #67e8f9;
+  --color-warn-fg: #fcd34d;
+  --color-warn-edge: rgba(251, 191, 36, 0.25);
+  --color-warn-soft: rgba(251, 191, 36, 0.08);
+  --color-danger-fg: #f87171;
+  /* 装饰网格线 */
+  --color-grid-line: rgba(56, 189, 248, 0.045);
 
   --animate-fade-up: fade-up 0.35s ease-out both;
   --animate-blink: blink 1.1s step-end infinite;
   --animate-scan: scan 1.6s linear infinite;
+  --animate-input-drop: input-drop 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* 深色为默认色域：修复原生滚动条/表单控件渲染（须在 .light 之前） */
+:root {
+  color-scheme: dark;
+}
+
+/* 浅色主题：只翻转变量，不动组件 */
+.light {
+  color-scheme: light;
+  --color-ink: #f4f6fa;
+  --color-panel: #ffffff;
+  --color-edge: #dbe3ef;
+  --color-fg: #1e293b;
+  --color-fg-strong: #0f172a;
+  --color-fg-muted: #475569;
+  --color-fg-faint: #64748b;
+  --color-accent-fg: #0e7490;
+  --color-warn-fg: #b45309;
+  --color-warn-edge: rgba(245, 158, 11, 0.45);
+  --color-warn-soft: #fffbeb;
+  --color-danger-fg: #dc2626;
+  --color-grid-line: rgba(15, 23, 42, 0.07);
 }
 
 @keyframes fade-up {
   from {
     opacity: 0;
     transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 首页 → 聊天页：输入卡自视口中央落入底部（-40vh 近似中央到输入卡的距离） */
+@keyframes input-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-40vh);
+  }
+  55% {
+    opacity: 1;
   }
   to {
     opacity: 1;
@@ -64,7 +117,30 @@
 
 body {
   background: var(--color-ink);
-  color: #dbe4f3;
+  color: var(--color-fg);
+}
+
+/* 键盘焦点环：所有交互元素统一的可见焦点（文本输入元素用自身边框高亮，不叠加 outline） */
+:focus-visible:not(textarea):not(input) {
+  outline: 2px solid var(--color-accent-fg);
+  outline-offset: 2px;
+}
+
+/* 触控：消除双击缩放延迟 */
+button,
+label {
+  touch-action: manipulation;
+}
+
+/* 尊重系统"减少动态效果"设置 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* 透视网格 + 径向渐隐 */
@@ -73,13 +149,13 @@ body {
   inset: 0;
   z-index: -2;
   pointer-events: none;
-  background-image: linear-gradient(rgba(56, 189, 248, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(56, 189, 248, 0.045) 1px, transparent 1px);
+  background-image: linear-gradient(var(--color-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-grid-line) 1px, transparent 1px);
   background-size: 44px 44px;
   mask-image: radial-gradient(ellipse 100% 90% at 50% 10%, black 25%, transparent 78%);
 }
 
-/* 漂移光斑 */
+/* 漂移光斑（浅色主题下隐藏：深色霓虹质感专用） */
 .orb {
   position: fixed;
   z-index: -1;
@@ -104,6 +180,10 @@ body {
   bottom: -240px;
   background: rgba(139, 92, 246, 0.15);
   animation: drift-b 28s ease-in-out infinite alternate;
+}
+
+.light .orb {
+  display: none;
 }
 
 /* 深色滚动条 */
@@ -131,6 +211,19 @@ body {
   scrollbar-color: #14253f transparent;
 }
 
+.light ::-webkit-scrollbar-thumb {
+  background: #c3cedd;
+  border-color: var(--color-ink);
+}
+
+.light ::-webkit-scrollbar-thumb:hover {
+  background: #a9b8cc;
+}
+
+.light * {
+  scrollbar-color: #c3cedd transparent;
+}
+
 ::selection {
   background: rgba(34, 211, 238, 0.28);
 }
@@ -153,6 +246,20 @@ body {
 .btn-primary:hover:not(:disabled) {
   box-shadow: 0 0 28px rgba(34, 211, 238, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.22);
   filter: brightness(1.08);
+}
+
+/* 浅色下霓虹光晕降档 */
+.light .btn-primary {
+  box-shadow: 0 0 12px rgba(34, 211, 238, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.light .btn-primary:hover:not(:disabled) {
+  box-shadow: 0 0 18px rgba(34, 211, 238, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+/* 浅色下渐变文字加深保证可读性 */
+.light .text-gradient {
+  background-image: linear-gradient(100deg, #0891b2 10%, #2563eb 55%, #7c3aed 90%);
 }
 
 /* 扫描线（思考指示器内） */

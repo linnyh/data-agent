@@ -118,6 +118,24 @@ def create_app(
             raise HTTPException(status_code=400, detail=str(e))
         return {"path": str(dest.relative_to(storage.session_dir(session_id)))}
 
+    @app.get("/sessions/{session_id}/files")
+    def list_files(session_id: str, user_id: str = Depends(_require_user)):
+        _require_session_access(db, session_id, user_id)
+        return {"files": storage.list_uploads(session_id)}
+
+    @app.delete("/sessions/{session_id}/files")
+    def delete_file(
+        session_id: str,
+        path: str,
+        user_id: str = Depends(_require_user),
+    ):
+        _require_session_access(db, session_id, user_id)
+        try:
+            storage.delete_upload(session_id, path)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        return {"ok": True}
+
     # -- 对话 ----------------------------------------------------------------
 
     # 节点 → 用户可见阶段名（SSE progress 事件）
@@ -189,6 +207,7 @@ def create_app(
                             "rows": outcome.result.table.rows,
                             "total_rows": outcome.result.table.total_rows,
                             "attempts": outcome.attempts,
+                            "chart": _chart_payload(outcome.result.chart),
                         }
                     )
                 else:
@@ -222,7 +241,11 @@ def create_app(
             "rows": outcome.result.table.rows,
             "total_rows": outcome.result.table.total_rows,
             "attempts": outcome.attempts,
+            "chart": _chart_payload(outcome.result.chart),
         }
+
+    def _chart_payload(chart) -> dict | None:
+        return chart.model_dump() if chart is not None else None
 
     def _outcome_payload(outcome) -> dict:
         return {
@@ -232,6 +255,7 @@ def create_app(
             "rows": outcome.result.table.rows,
             "total_rows": outcome.result.table.total_rows,
             "attempts": outcome.attempts,
+            "chart": _chart_payload(outcome.result.chart),
         }
 
     @app.get("/sessions/{session_id}/history")

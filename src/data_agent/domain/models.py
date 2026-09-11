@@ -90,11 +90,28 @@ class TableData(BaseModel):
     total_rows: int | None = None
 
 
+class ChartSeries(BaseModel):
+    """图表规格中的一个数据系列。"""
+
+    name: str = ""
+    data: list[float | int | None]
+
+
+class ChartSpec(BaseModel):
+    """图表规格：对一张图表的声明式描述，须与结果表格数据对齐。"""
+
+    type: Literal["bar", "line", "pie", "scatter"]
+    title: str = ""
+    x: list[str] = []
+    series: list[ChartSeries]
+
+
 class Result(BaseModel):
-    """一次分析执行交付给用户的产出：叙述解读 + 结构化表格。"""
+    """一次分析执行交付给用户的产出：叙述解读 + 结构化表格 + 可选图表。"""
 
     narration: str
     table: TableData
+    chart: ChartSpec | None = None
     produced_at: datetime = Field(default_factory=_now_utc)
     source_kind: Literal["solver", "fallback"] = "solver"
 

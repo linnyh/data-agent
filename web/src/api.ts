@@ -2,6 +2,13 @@
 
 const TOKEN_KEY = "da_token";
 
+export type ChartSpec = {
+  type: "bar" | "line" | "pie" | "scatter";
+  title: string;
+  x: string[];
+  series: { name: string; data: (number | null)[] }[];
+};
+
 export type ResultEvent = {
   type: "result";
   narration: string;
@@ -9,6 +16,7 @@ export type ResultEvent = {
   rows: unknown[][];
   total_rows: number | null;
   attempts: number;
+  chart?: ChartSpec | null;
 };
 export type ClarificationEvent = { type: "clarification"; question: string };
 export type ProgressEvent = { type: "progress"; stage: string };
@@ -22,6 +30,7 @@ export type HistoryRecord = {
   rows: unknown[][];
   total_rows: number | null;
   status: string;
+  chart?: ChartSpec | null;
 };
 
 let token = localStorage.getItem(TOKEN_KEY) || "";
@@ -111,7 +120,18 @@ export const apiListSessions = () => api<{ sessions: string[] }>("/sessions");
 export const apiHistory = (sessionId: string) =>
   api<{ history: HistoryRecord[] }>(`/sessions/${sessionId}/history`);
 
-export async function uploadFile(sessionId: string, file: File): Promise<void> {
+export type UploadedFile = { filename: string; path: string };
+
+export const apiListFiles = (sessionId: string) =>
+  api<{ files: UploadedFile[] }>(`/sessions/${sessionId}/files`);
+
+export const apiDeleteFile = (sessionId: string, path: string) =>
+  api<{ ok: boolean }>(
+    `/sessions/${sessionId}/files?path=${encodeURIComponent(path)}`,
+    { method: "DELETE" },
+  );
+
+export async function uploadFile(sessionId: string, file: File): Promise<string> {
   const fd = new FormData();
   fd.append("file", file);
   const res = await fetch(`/sessions/${sessionId}/upload`, {
@@ -128,6 +148,8 @@ export async function uploadFile(sessionId: string, file: File): Promise<void> {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.detail || `上传失败 (${res.status})`);
   }
+  const body = (await res.json()) as { path: string };
+  return body.path;
 }
 
 export function toCsv(columns: string[], rows: unknown[][]): string {

@@ -25,7 +25,21 @@ class FakeLLM:
         self.need_clarification = need_clarification
 
     async def complete_structured(self, *, system: str, user: str, schema):
-        return schema(need_clarification=self.need_clarification, question="要哪列？")
+        if schema.__name__ == "ClarifyDecision":
+            return schema(need_clarification=self.need_clarification, question="要哪列？")
+        if schema.__name__ == "NarrateDecision":
+            from data_agent.domain.models import ChartSeries, ChartSpec
+
+            return schema(
+                narration="叙述：共 2 行。",
+                chart=ChartSpec(
+                    type="bar",
+                    title="t",
+                    x=["a", "b"],
+                    series=[ChartSeries(name="", data=[1, 2])],
+                ),
+            )
+        raise ValueError(f"unexpected schema: {schema.__name__}")
 
     async def complete_text(self, *, system: str, user: str) -> str:
         return "叙述：共 2 行。"
@@ -136,6 +150,9 @@ def test_full_chat_flow(client: TestClient):
     events = _sse_events(r.text)
     assert events[-1]["type"] == "result"
     assert events[-1]["rows"] == [[1], [2]]
+    # 图表规格随结果事件与历史下发
+    assert events[-1]["chart"]["type"] == "bar"
+    assert events[-1]["chart"]["x"] == ["a", "b"]
     # 执行阶段进度事件（节点级，最后一个为 narrate）
     stages = [e["stage"] for e in events if e["type"] == "progress"]
     assert stages, "应推送 progress 阶段事件"
@@ -199,6 +216,7 @@ def test_session_history(client: TestClient):
     assert [rec["question"] for rec in hist] == ["列出 value", "换个口径重算"]
     assert hist[0]["rows"] == [[1], [2]]
     assert hist[0]["narration"] == "叙述：共 2 行。"
+    assert hist[0]["chart"]["type"] == "bar"
 
     # 隔离：B 不能读 A 的历史
     bob = _register(client, "bob")
@@ -234,6 +252,53 @@ def test_user_isolation(client: TestClient):
     # 不存在的会话 → 404
     r404 = client.get("/sessions/nonexistent/result", headers=ha)
     assert r404.status_code == 404
+
+
+def test_files_list_and_delete(tmp_path: Path):
+    """文件列表端点 + 按路径删除：列表随上传/删除更新；路径穿越被拒。"""
+    graph = PipelineGraphBuilder(
+        solver=FakeSolver(),
+        doc_extractor=FakeDocExtractor(),
+        video_preprocessor=FakeVideoPreprocessor(),
+        llm=FakeLLM(need_clarification=False),
+    ).build()
+    db = _make_db(tmp_path / "app.db")
+    storage = SessionStorage(tmp_path / "sessions")
+    app = create_app(db=db, storage=storage, graph=graph)
+
+    with TestClient(app) as c:
+        alice = _register(c, "alice")
+        h = _auth_headers(alice["token"])
+        sid = c.post("/sessions", headers=h).json()["session_id"]
+
+        # 空列表
+        empty = c.get(f"/sessions/{sid}/files", headers=h)
+        assert empty.status_code == 200
+        assert empty.json()["files"] == []
+
+        up = c.post(
+            f"/sessions/{sid}/upload",
+            headers=h,
+            files={"file": ("t.csv", b"id,value\n1,10\n", "text/csv")},
+        )
+        assert up.status_code == 200
+        csv_path = tmp_path / "sessions" / sid / "context" / "csv" / "t.csv"
+        assert csv_path.exists()
+
+        # 列表反映上传（路径相对会话目录）
+        lst = c.get(f"/sessions/{sid}/files", headers=h).json()["files"]
+        assert [f["filename"] for f in lst] == ["t.csv"]
+        assert lst[0]["path"] == "context/csv/t.csv"
+
+        # 按路径删除
+        r = c.delete(f"/sessions/{sid}/files", headers=h, params={"path": "context/csv/t.csv"})
+        assert r.status_code == 200
+        assert not csv_path.exists()
+        assert c.get(f"/sessions/{sid}/files", headers=h).json()["files"] == []
+
+        # 路径穿越拒绝
+        evil = c.delete(f"/sessions/{sid}/files", headers=h, params={"path": "../t.csv"})
+        assert evil.status_code == 400
 
 
 def _make_db(path: Path) -> Database:

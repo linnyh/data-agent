@@ -3,12 +3,16 @@ import { createRoot } from "react-dom/client";
 import { hasToken } from "./api";
 import Login from "./Login";
 import Chat from "./Chat";
+import ThemeToggle, { applyTheme, currentPref } from "./ThemeToggle";
 import "@fontsource/space-grotesk/400.css";
 import "@fontsource/space-grotesk/500.css";
 import "@fontsource/space-grotesk/700.css";
 import "@fontsource/jetbrains-mono/400.css";
 import "@fontsource/jetbrains-mono/500.css";
 import "./index.css";
+
+// 渲染前应用持久化主题（默认跟随系统），避免闪烁
+applyTheme(currentPref());
 
 function App() {
   const [authed, setAuthed] = useState(hasToken());
@@ -24,6 +28,7 @@ function App() {
       <div className="bg-grid" />
       <div className="orb orb-a" />
       <div className="orb orb-b" />
+      <ThemeToggle />
       {authed ? <Chat /> : <Login onLogin={() => setAuthed(true)} />}
     </>
   );

@@ -16,7 +16,7 @@ from data_agent.domain.llm import ILLM
 from data_agent.domain.models import AnalysisGoal, Clarification, Result, TableData
 from data_agent.domain.solver import SolveOutcome
 
-CLARIFY_SYSTEM = """你是数据分析 Agent 的前置意图识别助手。对用户的输入做三态判定:
+CLARIFY_SYSTEM = """你是数枢（数据分析 Agent）的前置意图识别助手。对用户的输入做三态判定:
 
 1. **is_chitchat**: 输入不是数据分析请求——寒暄("你好")、闲聊、询问系统能力
    ("你能做什么")等。此时直接给出简短友好回复(中文, 1-2 句), 不要尝试分析。
@@ -93,7 +93,7 @@ async def clarify_node(
             "outcome": SolveOutcome(
                 status="ok",
                 result=Result(
-                    narration=decision.reply or "你好! 我是数据分析 Agent, 上传数据后告诉我你的分析目标即可。",
+                    narration=decision.reply or "你好! 我是数枢, 上传数据后告诉我你的分析目标即可。",
                     table=TableData(columns=[], rows=[], total_rows=0),
                 ),
                 attempts=0,

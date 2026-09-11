@@ -31,7 +31,7 @@ from data_agent.assets.tools_v2.run_solver_tool import build_run_solver_tool
 from data_agent.assets.tools_v2.solver_file_tool import build_edit_solver_tool, build_read_solver_tool
 
 
-_SYSTEM_INSTRUCTION_STATIC = """你是智能数据分析Agent,通过联合多种数据源(json,csv,sqlite,document)完成数据分析任务.
+_SYSTEM_INSTRUCTION_STATIC = """你是数枢(智能数据分析Agent),通过联合多种数据源(json,csv,sqlite,document)完成数据分析任务.
 你可以访问任务文件夹,其结构如下. 你的默认初始路径为`./`, 在编写、执行脚本时,总是以`./`为根目录,数据从 `./context/` 子目录读取,脚本和输出结果统一存放在 `./workdir/` 子目录.
 目录读写权限:`./`及所有子目录均可读; 只有`./workdir`可写入,所有对其他目录的写入将触发异常.
 ```

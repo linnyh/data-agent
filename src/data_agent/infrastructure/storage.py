@@ -49,6 +49,29 @@ class SessionStorage:
         dest.write_bytes(data)
         return dest
 
+    def list_uploads(self, session_id: str) -> list[dict]:
+        """列出已上传文件：context 分类子目录下的所有文件，路径相对会话目录。"""
+        sdir = self.session_dir(session_id)
+        ctx = sdir / "context"
+        items: list[dict] = []
+        for category in ("csv", "json", "db", "doc", "video"):
+            d = ctx / category
+            if not d.is_dir():
+                continue
+            for f in sorted(d.iterdir()):
+                if f.is_file():
+                    items.append({"filename": f.name, "path": str(f.relative_to(sdir))})
+        return items
+
+    def delete_upload(self, session_id: str, path: str) -> None:
+        """按相对路径删除已上传文件。路径解析后必须落在会话 context 内。"""
+        sdir = self.session_dir(session_id).resolve()
+        ctx = (sdir / "context").resolve()
+        dest = (sdir / Path(path)).resolve()
+        if not dest.is_relative_to(ctx):
+            raise ValueError("非法路径")
+        dest.unlink(missing_ok=True)
+
     def ensure_task_layout(self, session_id: str) -> Path:
         """确保任务目录布局（context/ + workdir/ + task.json）。返回会话目录。"""
         sdir = self.session_dir(session_id)
