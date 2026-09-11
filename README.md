@@ -4,6 +4,13 @@
 → 与 Agent 多轮对话澄清需求 → Agent 全自动执行分析（结构化 SQL + 文档抽取 + 视频多模态
 三条链）→ 叙述解读 + 结构化表格结果 → 追问迭代。
 
+## 界面预览
+
+<p align="center">
+  <img src="img/example-dark.png" width="45%" alt="深色主题界面" />
+  <img src="img/example-light.png" width="45%" alt="浅色主题界面" />
+</p>
+
 - 术语与领域模型：`CONTEXT.md`
 - 架构决策记录：`docs/adr/`（0001 框架选择 / 0002 架构边界 / 0003 认证 / 0004 交互边界 / 0005 历史事实源）
 - **设计文档（方案与设计思路）**：`docs/DESIGN.md`
