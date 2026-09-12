@@ -2,7 +2,7 @@
 
 - clarify / narrate 是管线两端的人机交互（ADR-0004）；管线内部全自动。
 - 节点幂等：追问（新调用、同 thread）时复用 checkpoint 中已算好的
-  视频/doc/折叠结果，只重跑 clarify 与 solve。
+  视频/doc/折叠/规划结果，只重跑 clarify 与 solve。
 - interrupt 需要 checkpointer（M4 用 MemorySaver，M5 换 AsyncSqliteSaver）。
 """
 
@@ -25,7 +25,12 @@ from data_agent.application.narrate import narrate_node
 from data_agent.application.state import PipelineState
 from data_agent.domain.judges import IRelevanceJudge
 from data_agent.domain.llm import ILLM
-from data_agent.domain.pipeline import IDocExtractor, IVideoPreprocessor, IVideoResultJudge
+from data_agent.domain.pipeline import (
+    IDocExtractor,
+    IPlanner,
+    IVideoPreprocessor,
+    IVideoResultJudge,
+)
 from data_agent.domain.solver import ISolver
 
 _CLARIFY_PREVIEW_CHARS = 3000
@@ -51,6 +56,7 @@ class PipelineGraphBuilder:
         doc_extractor: IDocExtractor,
         video_preprocessor: IVideoPreprocessor,
         llm: ILLM | None = None,
+        planner: IPlanner | None = None,
         video_result_judge: IVideoResultJudge | None = None,
         doc_relevance_judge: IRelevanceJudge | None = None,
         table_relevance_judge: IRelevanceJudge | None = None,
@@ -61,6 +67,7 @@ class PipelineGraphBuilder:
         self._doc_extractor = doc_extractor
         self._video_preprocessor = video_preprocessor
         self._llm = llm
+        self._planner = planner
         self._video_result_judge = video_result_judge
         self._doc_relevance_judge = doc_relevance_judge
         self._table_relevance_judge = table_relevance_judge
@@ -220,12 +227,28 @@ class PipelineGraphBuilder:
             return {"collapse_keys": None}
         return {"collapse_keys": _collapse_keys_for(registry, verdict.skipped)}
 
+    async def _plan(self, state: PipelineState) -> dict[str, Any]:
+        if "plan" in state:  # 幂等：追问复用已算规划
+            return {}
+        if self._planner is None:
+            return {"plan": ""}
+        try:
+            plan = await self._planner.plan(
+                goal=state["goal"],
+                task_dir=Path(state["task_dir"]),
+                knowledge=state.get("knowledge", ""),
+            )
+        except Exception:
+            plan = ""
+        return {"plan": plan}
+
     async def _solve(self, state: PipelineState) -> dict[str, Any]:
         outcome = await self._solver.solve(
             goal=state["goal"],
             task_dir=Path(state["task_dir"]),
             knowledge=state.get("knowledge", ""),
             history=state.get("history", ""),
+            plan=state.get("plan", "") or "",
             max_attempts=self._max_attempts,
         )
         return {"outcome": outcome}
@@ -246,6 +269,7 @@ class PipelineGraphBuilder:
         g.add_node("doc_relevance", self._doc_relevance)
         g.add_node("doc_extract", self._doc_extract)
         g.add_node("table_relevance", self._table_relevance)
+        g.add_node("plan", self._plan)
         g.add_node("solve", self._solve)
         g.add_node("narrate", self._narrate)
 
@@ -261,7 +285,8 @@ class PipelineGraphBuilder:
         g.add_edge("video_result", "doc_relevance")
         g.add_edge("doc_relevance", "doc_extract")
         g.add_edge("doc_extract", "table_relevance")
-        g.add_edge("table_relevance", "solve")
+        g.add_edge("table_relevance", "plan")
+        g.add_edge("plan", "solve")
         g.add_edge("solve", "narrate")
         g.add_edge("narrate", END)
         self._graph = g.compile(checkpointer=checkpointer or MemorySaver())

@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
+from data_agent.domain.models import AnalysisGoal
+
 
 @dataclass
 class DocExtractResult:
@@ -84,4 +86,21 @@ class IVideoResultJudge(Protocol):
         vote_rounds: int = 5,
     ) -> VideoResultAdvice:
         """返回预判建议；无视频/失败时 has_video=False。"""
+        ...
+
+
+class IPlanner(Protocol):
+    """解题规划：在求解前产出一份规划文本（markdown），供 solver 参考。
+
+    实现可带只读探查工具实查数据验证口径假设；失败返回空串不阻塞。
+    """
+
+    async def plan(
+        self,
+        *,
+        goal: AnalysisGoal,
+        task_dir: Path,
+        knowledge: str = "",
+    ) -> str:
+        """返回解题规划 markdown；无规划/失败时返回空串。"""
         ...

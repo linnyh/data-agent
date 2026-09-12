@@ -147,6 +147,7 @@ def create_app(
         "doc_relevance": "筛选相关文档",
         "doc_extract": "文档结构化抽取",
         "table_relevance": "筛选数据表",
+        "plan": "规划解题路径",
         "solve": "执行分析求解",
         "narrate": "生成结果解读",
     }

@@ -46,7 +46,11 @@ class FakeLLM:
 
 
 class FakeSolver:
-    async def solve(self, *, goal, task_dir, knowledge="", history="", max_attempts=5) -> SolveOutcome:
+    def __init__(self):
+        self.last_plan = ""
+
+    async def solve(self, *, goal, task_dir, knowledge="", history="", plan="", max_attempts=5) -> SolveOutcome:
+        self.last_plan = plan
         return SolveOutcome(
             status="ok",
             result=Result(
@@ -55,6 +59,17 @@ class FakeSolver:
             ),
             attempts=1,
         )
+
+
+class FakePlanner:
+    PLAN = "## 解题规划\n- 先按月份分组聚合"
+
+    def __init__(self):
+        self.calls = 0
+
+    async def plan(self, *, goal, task_dir, knowledge=""):
+        self.calls += 1
+        return self.PLAN
 
 
 class FakeDocExtractor:
@@ -252,6 +267,37 @@ def test_user_isolation(client: TestClient):
     # 不存在的会话 → 404
     r404 = client.get("/sessions/nonexistent/result", headers=ha)
     assert r404.status_code == 404
+
+
+def test_plan_node_feeds_solver(tmp_path: Path):
+    """规划节点在求解前产出规划并注入 solver；追问轮复用规划不重复调用。"""
+    solver = FakeSolver()
+    planner = FakePlanner()
+    graph = PipelineGraphBuilder(
+        solver=solver,
+        doc_extractor=FakeDocExtractor(),
+        video_preprocessor=FakeVideoPreprocessor(),
+        llm=FakeLLM(need_clarification=False),
+        planner=planner,
+    ).build()
+    db = _make_db(tmp_path / "app.db")
+    storage = SessionStorage(tmp_path / "sessions")
+    app = create_app(db=db, storage=storage, graph=graph)
+
+    with TestClient(app) as c:
+        alice = _register(c, "alice")
+        h = _auth_headers(alice["token"])
+        sid = c.post("/sessions", headers=h).json()["session_id"]
+
+        r1 = c.post(f"/sessions/{sid}/chat", headers=h, json={"question": "每月订单量"})
+        assert _sse_events(r1.text)[-1]["type"] == "result"
+        assert planner.calls == 1
+        assert solver.last_plan == FakePlanner.PLAN
+
+        # 追问：同 thread 复用 checkpoint 中的规划，不再调用 planner
+        r2 = c.post(f"/sessions/{sid}/chat", headers=h, json={"question": "换个口径重算"})
+        assert _sse_events(r2.text)[-1]["type"] == "result"
+        assert planner.calls == 1
 
 
 def test_files_list_and_delete(tmp_path: Path):

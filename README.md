@@ -23,6 +23,7 @@
 
 - 🤖 **对话式分析**：自然语言提问，Agent 自动澄清歧义，全自动执行分析
 - 📊 **多模态数据源**：结构化数据（csv/json/sqlite）+ 文档（md/pdf）+ 视频简报，统一注册进 DuckDB 只读查询
+- 🧭 **先规划后求解**：求解前由规划 Agent 带只读探查实查口径/量纲/去重假设，产出解题规划供 solver 参考
 - 🔧 **ReAct 求解**：只读 SQL 探查 + 沙箱代码执行，失败自动重试，兜底直跑
 - 📈 **自动图表**：解读结果时自动附图（bar/line/pie/scatter），霓虹主题、导出 PNG
 - 💬 **多轮记忆**：会话历史注入，支持追问迭代与口径重算
@@ -77,13 +78,13 @@ src/data_agent/
 │   └── llm.py         # ILLM（模型能力窄抽象）
 ├── application/       # LangGraph 图 = 用例编排
 │   ├── state.py       # PipelineState（checkpoint 持久化状态）
-│   ├── graph.py       # clarify → 管线(视频→doc→表→求解) → narrate
+│   ├── graph.py       # clarify → 管线(视频→doc→表→规划→求解) → narrate
 │   ├── clarify.py     # 歧义检测 + interrupt/resume
 │   └── narrate.py     # 结果叙述解读 + 图表规格
 ├── adapters/          # 依赖倒置的实现
 │   ├── duckdb/        # DuckDB 数据源注册/描述（与内置参考实现逐字节对齐）
 │   ├── judges/        # 相关性判定（多轮投票 + 召回优先兜底）
-│   ├── pipeline/      # 视频/doc 算法资产 Adapter（模型工厂注入）
+│   ├── pipeline/      # 视频/doc/规划 算法资产 Adapter（模型工厂注入）
 │   ├── models.py      # OpenAI 兼容 endpoint（think/nothink 两实例）
 │   ├── sandbox.py     # 子进程执行 + 超时 + 内存限制
 │   ├── scaffold.py    # solver.py 脚手架生成
@@ -131,8 +132,8 @@ uv run pytest tests/ -q          # 全量（89 测试）
 ```
 
 覆盖：领域模型 / DuckDB 与内置参考实现逐字节对齐 / 投票聚合语义 / 求解沙箱三态 /
-attempt 循环 / 管线图端到端（fake 注入）/ 对话流（interrupt-resume）/ API 集成与隔离 /
-文件列表与删除 / 图表规格下发 / 评分机制。
+attempt 循环 / 管线图端到端（fake 注入）/ 对话流（interrupt-resume）/ 解题规划注入与复用 /
+API 集成与隔离 / 文件列表与删除 / 图表规格下发 / 评分机制。
 
 ## 📚 文档
 

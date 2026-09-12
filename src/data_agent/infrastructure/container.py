@@ -11,6 +11,7 @@ from data_agent.adapters.judges import DocRelevanceJudge, TableRelevanceJudge
 from data_agent.adapters.models import OpenAICompatibleLLM
 from data_agent.adapters.pipeline import (
     AssetDocExtractor,
+    AssetPlanner,
     AssetVideoPreprocessor,
     AssetVideoResultJudge,
 )
@@ -47,6 +48,7 @@ class Container:
         self.doc_extractor = AssetDocExtractor()
         self.video_preprocessor = AssetVideoPreprocessor()
         self.video_result_judge = AssetVideoResultJudge()
+        self.planner = AssetPlanner()
 
         # 求解域
         self.sandbox = SubprocessSolverSandbox()
@@ -58,6 +60,7 @@ class Container:
             doc_extractor=self.doc_extractor,
             video_preprocessor=self.video_preprocessor,
             llm=self.llm_nothink,
+            planner=self.planner,
             video_result_judge=self.video_result_judge,
             doc_relevance_judge=self.doc_relevance_judge,
             table_relevance_judge=self.table_relevance_judge,

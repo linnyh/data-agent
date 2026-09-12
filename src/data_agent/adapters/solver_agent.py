@@ -141,6 +141,7 @@ class LangGraphSolver:
         task_dir: Path,
         knowledge: str = "",
         history: str = "",
+        plan: str = "",
         max_attempts: int = 5,
     ) -> SolveOutcome:
         task_dir = Path(task_dir).resolve()
@@ -173,11 +174,13 @@ class LangGraphSolver:
 
         desc_str = FileDescriber().describe_context_dir(task_dir, "context", skip_knowledge=True)
         hist_block = f"\n\n{history.strip()}\n" if history.strip() else ""
+        plan_block = f"## 解题规划\n{plan.strip()}\n\n" if plan.strip() else ""
         user_input = (
             "You have following context files:\n\n"
             f"{desc_str}\n\n"
             f"`context/knowledge.md` 描述任务涉及的字段和相关知识,内容如下:\n{knowledge}\n"
             f"{hist_block}"
+            f"{plan_block}"
             f"通过完成 `solver.py` 完成任务:\n{goal.text}\n\n"
             "注意:`workdir/solver.py` 已经预生成了脚手架代码,包含正确的输入输出路径、"
             "所有数据文件的读取逻辑(已加载为 DataFrame)、以及最终保存到 `workdir/prediction.csv` "

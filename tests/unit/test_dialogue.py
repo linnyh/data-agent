@@ -25,12 +25,17 @@ class FakeLLM:
         self.clarify_users: list[str] = []
 
     async def complete_structured(self, *, system: str, user: str, schema):
-        self.clarify_calls += 1
-        self.clarify_users.append(user)
-        return schema(
-            need_clarification=self.need_clarification,
-            question=self.question,
-        )
+        if schema.__name__ == "ClarifyDecision":
+            self.clarify_calls += 1
+            self.clarify_users.append(user)
+            return schema(
+                need_clarification=self.need_clarification,
+                question=self.question,
+            )
+        if schema.__name__ == "NarrateDecision":
+            self.narrate_calls += 1
+            return schema(narration="共 2 行数据。")
+        raise ValueError(f"unexpected schema: {schema.__name__}")
 
     async def complete_text(self, *, system: str, user: str) -> str:
         self.narrate_calls += 1
@@ -42,7 +47,7 @@ class FakeSolver:
         self.calls: list[str] = []
         self.histories: list[str] = []
 
-    async def solve(self, *, goal, task_dir, knowledge="", history="", max_attempts=5) -> SolveOutcome:
+    async def solve(self, *, goal, task_dir, knowledge="", history="", plan="", max_attempts=5) -> SolveOutcome:
         self.calls.append(goal.text)
         self.histories.append(history)
         return SolveOutcome(
@@ -190,8 +195,10 @@ def test_narrate_failure_keeps_result(task_dir: Path):
     """narrate 失败不阻塞：结果保留，叙述为空。"""
 
     class _BrokenNarrateLLM(FakeLLM):
-        async def complete_text(self, *, system: str, user: str) -> str:
-            raise RuntimeError("narrate boom")
+        async def complete_structured(self, *, system: str, user: str, schema):
+            if schema.__name__ == "NarrateDecision":
+                raise RuntimeError("narrate boom")
+            return await super().complete_structured(system=system, user=user, schema=schema)
 
     llm = _BrokenNarrateLLM(need_clarification=False)
     solver = FakeSolver()
