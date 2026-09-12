@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import time
 from pathlib import Path
 
@@ -44,7 +45,11 @@ _COMPUTE_TYPE = "int8"
 # 仓库根 = parents[3]）。容器内 /app/src/.../audio_transcribe.py → /app/asr_models（Dockerfile
 # COPY 到此），本机则指向 prepare_models.sh 的输出目录——容器与本机同一相对路径，无需任何
 # 环境变量。local 模式以此为权威基准：按 <root>/<name> 离线目录加载，不走 HF 缓存/外网。
-_DEFAULT_MODEL_ROOT = str(Path(__file__).resolve().parents[3] / "asr_models")
+# 桌面打包（PyInstaller frozen）时 asr_models 随 _MEIPASS 打包。
+if getattr(sys, "frozen", False):
+    _DEFAULT_MODEL_ROOT = str(Path(sys._MEIPASS) / "asr_models")  # noqa: SLF001
+else:
+    _DEFAULT_MODEL_ROOT = str(Path(__file__).resolve().parents[3] / "asr_models")
 
 __all__ = ["transcribe_video", "transcribe_to_file", "detect_audio_language",
            "DEFAULT_ASR_ENDPOINT"]

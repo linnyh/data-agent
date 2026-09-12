@@ -29,15 +29,27 @@ from data_agent.infrastructure.db import Database
 from data_agent.infrastructure.storage import SessionStorage
 
 
+def _bundle_root() -> Path:
+    """PyInstaller frozen 时资源根为 _MEIPASS,否则为仓库根。"""
+    if getattr(sys, "frozen", False):
+        return Path(sys._MEIPASS)  # noqa: SLF001
+    return Path(__file__).resolve().parents[3]
+
+
 async def build_application():
-    # 数据目录锚定仓库根（与 .env 读取一致），不依赖进程启动目录
+    # 数据目录锚定仓库根（与 .env 读取一致），不依赖进程启动目录；
+    # 桌面打包后默认 AppSupport（壳会显式注入 DATA_AGENT_DATA_DIR）
+    root = _bundle_root()
+    default_data_dir = root / "data"
+    if getattr(sys, "frozen", False):
+        default_data_dir = Path.home() / "Library" / "Application Support" / "DataPivot"
     data_dir = Path(
-        os.environ.get(
-            "DATA_AGENT_DATA_DIR",
-            str(Path(__file__).resolve().parents[3] / "data"),
-        )
+        os.environ.get("DATA_AGENT_DATA_DIR", str(default_data_dir))
     ).resolve()
     data_dir.mkdir(parents=True, exist_ok=True)
+    if getattr(sys, "frozen", False):
+        # 桌面 App 用户配置（AppSupport/.env）；setdefault 语义保证环境变量优先
+        load_dotenv(data_dir / ".env")
 
     db = Database(data_dir / "app.db")
     db.connect()
@@ -55,7 +67,7 @@ async def build_application():
     # 前端 build 产物托管（共识 #4：生产单端口同源）。dist 不存在时跳过（纯 API 模式）。
     from fastapi.staticfiles import StaticFiles
 
-    dist = Path(__file__).resolve().parents[3] / "web" / "dist"
+    dist = root / "web" / "dist"
     if dist.is_dir():
         app.mount("/", StaticFiles(directory=dist, html=True), name="web")
     return app

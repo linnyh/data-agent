@@ -116,7 +116,13 @@ class SubprocessSolverSandbox:
 
     @staticmethod
     def _default_src_roots() -> list[str]:
-        """项目 src/ 目录（solver.py 子进程需要 import data_agent）。"""
+        """项目 src/ 目录（solver.py 子进程需要 import data_agent）。
+
+        PyInstaller frozen 时打包模块根为 _MEIPASS（solver.py 由 bootloader 执行，
+        PYTHONPATH 指向 _MEIPASS 即可 import 打包的 data_agent 模块）。
+        """
+        if getattr(sys, "frozen", False):
+            return [str(Path(sys._MEIPASS))]  # noqa: SLF001
         repo_root = Path(__file__).resolve().parents[3]
         return [str(repo_root / "src")]
 

@@ -1,0 +1,4 @@
+# sidecar 构建产物(脚本生成,含 1.4GB whisper 模型)
+src-tauri/binaries/
+node_modules/
+DataPivot.dmg
