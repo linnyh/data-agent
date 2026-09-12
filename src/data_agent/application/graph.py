@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from typing import Any
@@ -29,6 +30,7 @@ from data_agent.domain.pipeline import (
     IDedupJudger,
     IDocExtractor,
     IPlanner,
+    IPreAgent,
     IVideoPreprocessor,
     IVideoResultJudge,
 )
@@ -59,6 +61,7 @@ class PipelineGraphBuilder:
         llm: ILLM | None = None,
         planner: IPlanner | None = None,
         dedup_judger: IDedupJudger | None = None,
+        pre_agent: IPreAgent | None = None,
         video_result_judge: IVideoResultJudge | None = None,
         doc_relevance_judge: IRelevanceJudge | None = None,
         table_relevance_judge: IRelevanceJudge | None = None,
@@ -71,6 +74,7 @@ class PipelineGraphBuilder:
         self._llm = llm
         self._planner = planner
         self._dedup_judger = dedup_judger
+        self._pre_agent = pre_agent
         self._video_result_judge = video_result_judge
         self._doc_relevance_judge = doc_relevance_judge
         self._table_relevance_judge = table_relevance_judge
@@ -233,30 +237,29 @@ class PipelineGraphBuilder:
     async def _plan(self, state: PipelineState) -> dict[str, Any]:
         if "plan" in state:  # 幂等：追问复用已算规划
             return {}
-        # 解题规划 + 去重口径建议，合并注入 solver
-        parts: list[str] = []
+        # 解题规划 + 去重口径建议 + 知识精选/输出形态建议：三者互不依赖，并发执行
+        goal = state["goal"]
+        task_dir = Path(state["task_dir"])
+        knowledge = state.get("knowledge", "")
+
+        async def _safe(coro):
+            try:
+                return await coro
+            except Exception:
+                return ""
+
+        tasks: list[Any] = []
         if self._planner is not None:
-            try:
-                parts.append(
-                    await self._planner.plan(
-                        goal=state["goal"],
-                        task_dir=Path(state["task_dir"]),
-                        knowledge=state.get("knowledge", ""),
-                    )
-                )
-            except Exception:
-                pass
+            tasks.append(_safe(self._planner.plan(goal=goal, task_dir=task_dir, knowledge=knowledge)))
         if self._dedup_judger is not None:
-            try:
-                parts.append(
-                    await self._dedup_judger.judge(
-                        goal=state["goal"],
-                        task_dir=Path(state["task_dir"]),
-                        knowledge=state.get("knowledge", ""),
-                    )
-                )
-            except Exception:
-                pass
+            tasks.append(
+                _safe(self._dedup_judger.judge(goal=goal, task_dir=task_dir, knowledge=knowledge))
+            )
+        if self._pre_agent is not None:
+            tasks.append(
+                _safe(self._pre_agent.extract(goal=goal, task_dir=task_dir, knowledge=knowledge))
+            )
+        parts = await asyncio.gather(*tasks) if tasks else []
         return {"plan": "\n\n".join(p for p in parts if p.strip())}
 
     async def _solve(self, state: PipelineState) -> dict[str, Any]:

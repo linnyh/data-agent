@@ -13,6 +13,7 @@ from data_agent.adapters.pipeline import (
     AssetDedupJudger,
     AssetDocExtractor,
     AssetPlanner,
+    AssetPreAgent,
     AssetVideoPreprocessor,
     AssetVideoResultJudge,
 )
@@ -51,6 +52,7 @@ class Container:
         self.video_result_judge = AssetVideoResultJudge()
         self.planner = AssetPlanner()
         self.dedup_judger = AssetDedupJudger()
+        self.pre_agent = AssetPreAgent()
 
         # 求解域
         self.sandbox = SubprocessSolverSandbox()
@@ -64,6 +66,7 @@ class Container:
             llm=self.llm_nothink,
             planner=self.planner,
             dedup_judger=self.dedup_judger,
+            pre_agent=self.pre_agent,
             video_result_judge=self.video_result_judge,
             doc_relevance_judge=self.doc_relevance_judge,
             table_relevance_judge=self.table_relevance_judge,

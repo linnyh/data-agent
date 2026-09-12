@@ -83,6 +83,17 @@ class FakeDedupJudger:
         return self.ADVICE
 
 
+class FakePreAgent:
+    EXTRACT = "## 输出形态建议\n任务类型: aggregate; 预期输出列: month, orders"
+
+    def __init__(self):
+        self.calls = 0
+
+    async def extract(self, *, goal, task_dir, knowledge=""):
+        self.calls += 1
+        return self.EXTRACT
+
+
 class FakeDocExtractor:
     async def extract(self, *, task_dir, log_dir, relevant_stems=None) -> DocExtractResult:
         return DocExtractResult(db_path=task_dir / "context" / "db", tables=["a"])
@@ -281,10 +292,11 @@ def test_user_isolation(client: TestClient):
 
 
 def test_plan_node_feeds_solver(tmp_path: Path):
-    """规划节点在求解前产出规划与去重建议并注入 solver；追问轮复用不重复调用。"""
+    """规划节点在求解前并发产出规划/去重建议/输出形态建议并注入 solver；追问轮复用不重复调用。"""
     solver = FakeSolver()
     planner = FakePlanner()
     dedup_judger = FakeDedupJudger()
+    pre_agent = FakePreAgent()
     graph = PipelineGraphBuilder(
         solver=solver,
         doc_extractor=FakeDocExtractor(),
@@ -292,6 +304,7 @@ def test_plan_node_feeds_solver(tmp_path: Path):
         llm=FakeLLM(need_clarification=False),
         planner=planner,
         dedup_judger=dedup_judger,
+        pre_agent=pre_agent,
     ).build()
     db = _make_db(tmp_path / "app.db")
     storage = SessionStorage(tmp_path / "sessions")
@@ -306,13 +319,17 @@ def test_plan_node_feeds_solver(tmp_path: Path):
         assert _sse_events(r1.text)[-1]["type"] == "result"
         assert planner.calls == 1
         assert dedup_judger.calls == 1
-        assert solver.last_plan == f"{FakePlanner.PLAN}\n\n{FakeDedupJudger.ADVICE}"
+        assert pre_agent.calls == 1
+        assert solver.last_plan == (
+            f"{FakePlanner.PLAN}\n\n{FakeDedupJudger.ADVICE}\n\n{FakePreAgent.EXTRACT}"
+        )
 
-        # 追问：同 thread 复用 checkpoint 中的规划，不再调用 planner / judger
+        # 追问：同 thread 复用 checkpoint 中的规划，不再调用三个建议 agent
         r2 = c.post(f"/sessions/{sid}/chat", headers=h, json={"question": "换个口径重算"})
         assert _sse_events(r2.text)[-1]["type"] == "result"
         assert planner.calls == 1
         assert dedup_judger.calls == 1
+        assert pre_agent.calls == 1
 
 
 def test_files_list_and_delete(tmp_path: Path):

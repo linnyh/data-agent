@@ -121,3 +121,21 @@ class IDedupJudger(Protocol):
     ) -> str:
         """返回去重口径建议文本；失败时返回空串。"""
         ...
+
+
+class IPreAgent(Protocol):
+    """知识精选与输出形态预测：从 knowledge.md 抽取强对齐案例与字段约束，
+    并预测输出列/行数上限/任务类型，作为建议并入解题规划。
+
+    失败返回空串不阻塞。
+    """
+
+    async def extract(
+        self,
+        *,
+        goal: AnalysisGoal,
+        task_dir: Path,
+        knowledge: str = "",
+    ) -> str:
+        """返回知识精选与输出形态建议文本；失败时返回空串。"""
+        ...

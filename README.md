@@ -25,6 +25,7 @@
 - 📊 **多模态数据源**：结构化数据（csv/json/sqlite）+ 文档（md/pdf）+ 视频简报，统一注册进 DuckDB 只读查询
 - 🧭 **先规划后求解**：求解前由规划 Agent 带只读探查实查口径/量纲/去重假设，产出解题规划供 solver 参考
 - ⚖️ **去重口径判定**：投票判定最终结果是否应按目标输出列去重，建议并入解题规划注入 solver
+- 🎯 **输出形态预测**：抽取强对齐 SQL 案例与字段约束，预测输出列/行数上限/任务类型（摇摆原则宁多勿漏），与规划、去重建议并发产出
 - 🔧 **ReAct 求解**：只读 SQL 探查 + 沙箱代码执行，失败自动重试，兜底直跑
 - 📈 **自动图表**：解读结果时自动附图（bar/line/pie/scatter），霓虹主题、导出 PNG
 - 💬 **多轮记忆**：会话历史注入，支持追问迭代与口径重算
@@ -85,7 +86,7 @@ src/data_agent/
 ├── adapters/          # 依赖倒置的实现
 │   ├── duckdb/        # DuckDB 数据源注册/描述（与内置参考实现逐字节对齐）
 │   ├── judges/        # 相关性判定（多轮投票 + 召回优先兜底）
-│   ├── pipeline/      # 视频/doc/规划/去重判定 算法资产 Adapter（模型工厂注入）
+│   ├── pipeline/      # 视频/doc/规划/去重判定/输出形态 算法资产 Adapter（模型工厂注入）
 │   ├── models.py      # OpenAI 兼容 endpoint（think/nothink 两实例）
 │   ├── sandbox.py     # 子进程执行 + 超时 + 内存限制
 │   ├── scaffold.py    # solver.py 脚手架生成
@@ -126,6 +127,21 @@ tests/                # 单测 + 冒烟 + 标注集（benchmark/）
 
 会话间用户级隔离：访问他人会话返回 403，不存在返回 404。
 
+## 🔭 可观测性（LangSmith）
+
+观察 LangGraph 执行轨迹：节点边界、LLM 每次调用、ReAct 工具调用、token 与延迟。
+
+```bash
+# .env 追加（langsmith.com 注册获取 key；数据会上传到 LangSmith 服务器）
+LANGSMITH_TRACING=true
+LANGSMITH_ENDPOINT=https://api.smith.langchain.com   # 默认值，可省略；自托管时改写
+LANGSMITH_API_KEY=lsv2_xxx
+LANGSMITH_PROJECT=data-agent
+```
+
+覆盖范围：solver ReAct 循环与对话层（clarify / narrate）自动追踪；
+规划 / 去重判定 / 输出形态等 pydantic_ai 资产不在自动追踪内（官方追踪方案为 pydantic_logfire）。
+
 ## 🧪 测试
 
 ```bash
@@ -133,7 +149,7 @@ uv run pytest tests/ -q          # 全量（89 测试）
 ```
 
 覆盖：领域模型 / DuckDB 与内置参考实现逐字节对齐 / 投票聚合语义 / 求解沙箱三态 /
-attempt 循环 / 管线图端到端（fake 注入）/ 对话流（interrupt-resume）/ 解题规划与去重建议注入 /
+attempt 循环 / 管线图端到端（fake 注入）/ 对话流（interrupt-resume）/ 规划·去重·输出形态建议注入 /
 API 集成与隔离 / 文件列表与删除 / 图表规格下发 / 评分机制。
 
 ## 📚 文档
