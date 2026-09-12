@@ -8,10 +8,11 @@ from langchain_openai import ChatOpenAI
 
 
 class OpenAICompatibleLLM:
-    """自托管 OpenAI 兼容协议模型（qwen 等）。
+    """自托管 OpenAI 兼容协议模型（DeepSeek）。
 
     think/nothink 语义通过构造参数表达：``enable_thinking`` 非 None 时以
-    extra_body 注入（qwen 风格开关）；不同厂商可换不同 extra_body 键。
+    DeepSeek 风格 ``thinking: {"type": enabled|disabled}`` 注入 extra_body；
+    其他厂商需换对应参数格式。
     """
 
     model_name: str
@@ -35,7 +36,9 @@ class OpenAICompatibleLLM:
             max_retries=1,
         )
         if enable_thinking is not None:
-            kwargs["extra_body"] = {"enable_thinking": enable_thinking}
+            kwargs["extra_body"] = {
+                "thinking": {"type": "enabled" if enable_thinking else "disabled"}
+            }
         self.model_name = model_name
         self._chat = ChatOpenAI(**kwargs)
 
