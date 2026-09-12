@@ -317,6 +317,20 @@ def get_model_config():
     }
 
 
+def build_model_video():
+    """视频链模型：VIDEO_MODEL_* 覆盖，空则回退主 MODEL_*（视频帧图需多模态模型）。"""
+    config = get_model_config()
+    _env_provider = OpenAIProvider(
+        base_url=os.environ.get("VIDEO_MODEL_API_URL") or config["base_url"],
+        api_key=os.environ.get("VIDEO_MODEL_API_KEY") or config["api_key"],
+        http_client=_build_http_client(),
+    )
+    return OpenAIChatModel(
+        model_name=os.environ.get("VIDEO_MODEL_NAME") or config["model_name"],
+        provider=_env_provider,
+    )
+
+
 def build_model():
     config = get_model_config()
     _env_provider = OpenAIProvider(

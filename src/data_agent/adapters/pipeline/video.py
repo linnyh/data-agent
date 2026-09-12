@@ -52,9 +52,9 @@ class AssetVideoResultJudge:
 
     @staticmethod
     def _default_factory() -> Any:
-        from data_agent.assets.tools_v2.general_tools import build_model
+        from data_agent.assets.tools_v2.general_tools import build_model_video
 
-        return build_model()
+        return build_model_video()
 
     async def judge(
         self,
