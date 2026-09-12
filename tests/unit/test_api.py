@@ -1,6 +1,6 @@
-"""M5 验收：API 集成（注册/登录/会话/上传/chat 全流程 + 用户隔离）。
+"""M5 验收：API 集成（会话/上传/chat 全流程，本地单用户无认证）。
 
-图与模型均用 fake 注入（不依赖真实 endpoint）；认证/权限/存储走真实实现。
+图与模型均用 fake 注入（不依赖真实 endpoint）；存储走真实实现。
 """
 
 from __future__ import annotations
@@ -122,16 +122,6 @@ def client(tmp_path: Path):
         yield c
 
 
-def _register(client: TestClient, name: str) -> dict:
-    r = client.post("/auth/register", json={"username": name, "password": "secret123"})
-    assert r.status_code == 200, r.text
-    return r.json()
-
-
-def _auth_headers(token: str) -> dict:
-    return {"Authorization": f"Bearer {token}"}
-
-
 def _sse_events(response_text: str) -> list[dict]:
     events = []
     for line in response_text.splitlines():
@@ -140,36 +130,13 @@ def _sse_events(response_text: str) -> list[dict]:
     return events
 
 
-def test_register_login_and_duplicate(client: TestClient):
-    r = client.post("/auth/register", json={"username": "alice", "password": "secret123"})
-    assert r.status_code == 200
-    # 重复注册
-    r2 = client.post("/auth/register", json={"username": "alice", "password": "secret123"})
-    assert r2.status_code == 409
-
-    # 登录：正确与错误密码
-    ok = client.post("/auth/login", json={"username": "alice", "password": "secret123"})
-    assert ok.status_code == 200
-    bad = client.post("/auth/login", json={"username": "alice", "password": "wrongpass"})
-    assert bad.status_code == 401
-
-    # 未认证访问
-    r3 = client.get("/sessions")
-    assert r3.status_code == 401
-    r4 = client.get("/sessions", headers=_auth_headers("badtoken"))
-    assert r4.status_code == 401
-
-
 def test_full_chat_flow(client: TestClient):
-    alice = _register(client, "alice")
-    h = _auth_headers(alice["token"])
 
-    sid = client.post("/sessions", headers=h).json()["session_id"]
+    sid = client.post("/sessions").json()["session_id"]
 
     # 上传 csv
     up = client.post(
         f"/sessions/{sid}/upload",
-        headers=h,
         files={"file": ("t.csv", b"id,value\n1,10\n2,20\n", "text/csv")},
     )
     assert up.status_code == 200
@@ -177,13 +144,12 @@ def test_full_chat_flow(client: TestClient):
     # 不支持的类型
     bad = client.post(
         f"/sessions/{sid}/upload",
-        headers=h,
         files={"file": ("x.exe", b"binary", "application/octet-stream")},
     )
     assert bad.status_code == 400
 
     # chat（fake 图直通求解）
-    r = client.post(f"/sessions/{sid}/chat", headers=h, json={"question": "列出 value"})
+    r = client.post(f"/sessions/{sid}/chat", json={"question": "列出 value"})
     assert r.status_code == 200
     events = _sse_events(r.text)
     assert events[-1]["type"] == "result"
@@ -197,7 +163,7 @@ def test_full_chat_flow(client: TestClient):
     assert stages[-1] == "生成结果解读"
 
     # result 端点
-    rr = client.get(f"/sessions/{sid}/result", headers=h)
+    rr = client.get(f"/sessions/{sid}/result")
     assert rr.status_code == 200
     assert rr.json()["status"] == "ok"
 
@@ -215,11 +181,9 @@ def test_chat_clarify_interrupt_and_resume(tmp_path: Path):
     app = create_app(db=db, storage=storage, graph=graph)
 
     with TestClient(app) as c:
-        alice = _register(c, "alice")
-        h = _auth_headers(alice["token"])
-        sid = c.post("/sessions", headers=h).json()["session_id"]
+        sid = c.post("/sessions").json()["session_id"]
 
-        r1 = c.post(f"/sessions/{sid}/chat", headers=h, json={"question": "查一下数据"})
+        r1 = c.post(f"/sessions/{sid}/chat", json={"question": "查一下数据"})
         events = _sse_events(r1.text)
         assert events[-1]["type"] == "clarification"
         assert events[-1]["question"] == "要哪列？"
@@ -227,8 +191,7 @@ def test_chat_clarify_interrupt_and_resume(tmp_path: Path):
         # resume 续跑
         r2 = c.post(
             f"/sessions/{sid}/chat",
-            headers=h,
-            json={"question": "查一下数据", "resume": "value 列"},
+                json={"question": "查一下数据", "resume": "value 列"},
         )
         events2 = _sse_events(r2.text)
         assert events2[-1]["type"] == "result"
@@ -237,59 +200,23 @@ def test_chat_clarify_interrupt_and_resume(tmp_path: Path):
 
 def test_session_history(client: TestClient):
     """会话历史（ADR-0005）：每轮对话一条记录，checkpoint 为事实源。"""
-    alice = _register(client, "alice")
-    h = _auth_headers(alice["token"])
-    sid = client.post("/sessions", headers=h).json()["session_id"]
+    sid = client.post("/sessions").json()["session_id"]
 
     # 空历史
-    r0 = client.get(f"/sessions/{sid}/history", headers=h)
+    r0 = client.get(f"/sessions/{sid}/history")
     assert r0.json()["history"] == []
 
     # 两轮对话
     for q in ["列出 value", "换个口径重算"]:
-        r = client.post(f"/sessions/{sid}/chat", headers=h, json={"question": q})
+        r = client.post(f"/sessions/{sid}/chat", json={"question": q})
         assert _sse_events(r.text)[-1]["type"] == "result"
 
-    hist = client.get(f"/sessions/{sid}/history", headers=h).json()["history"]
+    hist = client.get(f"/sessions/{sid}/history").json()["history"]
     assert [rec["question"] for rec in hist] == ["列出 value", "换个口径重算"]
     assert hist[0]["rows"] == [[1], [2]]
     assert hist[0]["narration"] == "叙述：共 2 行。"
     assert hist[0]["chart"]["type"] == "bar"
 
-    # 隔离：B 不能读 A 的历史
-    bob = _register(client, "bob")
-    r403 = client.get(f"/sessions/{sid}/history", headers=_auth_headers(bob["token"]))
-    assert r403.status_code == 403
-
-
-def test_user_isolation(client: TestClient):
-    """用户 B 不能访问用户 A 的会话（共识 #23）。"""
-    alice = _register(client, "alice")
-    bob = _register(client, "bob")
-    ha, hb = _auth_headers(alice["token"]), _auth_headers(bob["token"])
-
-    sid = client.post("/sessions", headers=ha).json()["session_id"]
-
-    for method, path in [
-        ("GET", f"/sessions/{sid}/result"),
-        ("POST", f"/sessions/{sid}/chat"),
-    ]:
-        if method == "GET":
-            r = client.get(path, headers=hb)
-        else:
-            r = client.post(path, headers=hb, json={"question": "x"})
-        assert r.status_code == 403, path
-
-    up = client.post(
-        f"/sessions/{sid}/upload",
-        headers=hb,
-        files={"file": ("t.csv", b"a\n1\n", "text/csv")},
-    )
-    assert up.status_code == 403
-
-    # 不存在的会话 → 404
-    r404 = client.get("/sessions/nonexistent/result", headers=ha)
-    assert r404.status_code == 404
 
 
 def test_plan_node_feeds_solver(tmp_path: Path):
@@ -312,11 +239,9 @@ def test_plan_node_feeds_solver(tmp_path: Path):
     app = create_app(db=db, storage=storage, graph=graph)
 
     with TestClient(app) as c:
-        alice = _register(c, "alice")
-        h = _auth_headers(alice["token"])
-        sid = c.post("/sessions", headers=h).json()["session_id"]
+        sid = c.post("/sessions").json()["session_id"]
 
-        r1 = c.post(f"/sessions/{sid}/chat", headers=h, json={"question": "每月订单量"})
+        r1 = c.post(f"/sessions/{sid}/chat", json={"question": "每月订单量"})
         assert _sse_events(r1.text)[-1]["type"] == "result"
         assert planner.calls == 1
         assert dedup_judger.calls == 1
@@ -326,29 +251,42 @@ def test_plan_node_feeds_solver(tmp_path: Path):
         )
 
         # 追问：同 thread 复用 checkpoint 中的规划，不再调用三个建议 agent
-        r2 = c.post(f"/sessions/{sid}/chat", headers=h, json={"question": "换个口径重算"})
+        r2 = c.post(f"/sessions/{sid}/chat", json={"question": "换个口径重算"})
         assert _sse_events(r2.text)[-1]["type"] == "result"
         assert planner.calls == 1
         assert dedup_judger.calls == 1
         assert pre_agent.calls == 1
 
 
-def test_jwt_secret_persisted(tmp_path: Path, monkeypatch):
-    """dev 密钥持久化：重启（环境变量丢失）后仍读到同一密钥；显式设置时不动。"""
-    from data_agent.infrastructure.main import _ensure_jwt_secret
+def test_is_skipped_node_semantics():
+    """跳过判定按节点语义：空集合≠跳过（table_relevance 全相关是有效结果）。"""
+    from data_agent.infrastructure.api.app import _is_skipped
 
-    monkeypatch.delenv("DATA_AGENT_JWT_SECRET", raising=False)
-    _ensure_jwt_secret(tmp_path)
-    first = os.environ["DATA_AGENT_JWT_SECRET"]
-    assert (tmp_path / ".jwt_secret").is_file()
+    assert _is_skipped("table_relevance", {"collapse_keys": set()}) is False
+    assert _is_skipped("doc_relevance", {"relevant_stems": set()}) is True
+    assert _is_skipped("video_preprocess", {"video_parts": [], "video_result": None}) is True
+    assert _is_skipped("doc_extract", {"doc_extract": None}) is True
+    assert _is_skipped("solve", {}) is True  # 幂等跳过
 
-    monkeypatch.delenv("DATA_AGENT_JWT_SECRET", raising=False)
-    _ensure_jwt_secret(tmp_path)
-    assert os.environ["DATA_AGENT_JWT_SECRET"] == first
 
-    monkeypatch.setenv("DATA_AGENT_JWT_SECRET", "custom-secret")
-    _ensure_jwt_secret(tmp_path)
-    assert os.environ["DATA_AGENT_JWT_SECRET"] == "custom-secret"
+def test_summarize_limits_volume():
+    """节点轨迹摘要：深度与列表截断，防大对象撑爆 SSE。"""
+    from data_agent.infrastructure.api.app import _summarize
+
+    s = _summarize({"a": {"b": {"c": "x" * 1000}}, "rows": list(range(100))})
+    assert len(str(s["a"]["b"])) <= 310  # depth>=2 转字符串并截断
+    assert "…共 100 项" in s["rows"][-1]
+
+
+def test_session_title_from_first_question(client: TestClient):
+    """会话标题 = 首条分析目标；追问轮不覆盖。"""
+    sid = client.post("/sessions").json()["session_id"]
+    client.post(f"/sessions/{sid}/chat", json={"question": "每月订单量趋势"})
+    client.post(f"/sessions/{sid}/chat", json={"question": "换个口径重算"})
+
+    lst = client.get("/sessions").json()["sessions"]
+    assert lst[0]["session_id"] == sid
+    assert lst[0]["title"] == "每月订单量趋势"
 
 
 def test_files_list_and_delete(tmp_path: Path):
@@ -364,37 +302,34 @@ def test_files_list_and_delete(tmp_path: Path):
     app = create_app(db=db, storage=storage, graph=graph)
 
     with TestClient(app) as c:
-        alice = _register(c, "alice")
-        h = _auth_headers(alice["token"])
-        sid = c.post("/sessions", headers=h).json()["session_id"]
+        sid = c.post("/sessions").json()["session_id"]
 
         # 空列表
-        empty = c.get(f"/sessions/{sid}/files", headers=h)
+        empty = c.get(f"/sessions/{sid}/files")
         assert empty.status_code == 200
         assert empty.json()["files"] == []
 
         up = c.post(
             f"/sessions/{sid}/upload",
-            headers=h,
-            files={"file": ("t.csv", b"id,value\n1,10\n", "text/csv")},
+                files={"file": ("t.csv", b"id,value\n1,10\n", "text/csv")},
         )
         assert up.status_code == 200
         csv_path = tmp_path / "sessions" / sid / "context" / "csv" / "t.csv"
         assert csv_path.exists()
 
         # 列表反映上传（路径相对会话目录）
-        lst = c.get(f"/sessions/{sid}/files", headers=h).json()["files"]
+        lst = c.get(f"/sessions/{sid}/files").json()["files"]
         assert [f["filename"] for f in lst] == ["t.csv"]
         assert lst[0]["path"] == "context/csv/t.csv"
 
         # 按路径删除
-        r = c.delete(f"/sessions/{sid}/files", headers=h, params={"path": "context/csv/t.csv"})
+        r = c.delete(f"/sessions/{sid}/files", params={"path": "context/csv/t.csv"})
         assert r.status_code == 200
         assert not csv_path.exists()
-        assert c.get(f"/sessions/{sid}/files", headers=h).json()["files"] == []
+        assert c.get(f"/sessions/{sid}/files").json()["files"] == []
 
         # 路径穿越拒绝
-        evil = c.delete(f"/sessions/{sid}/files", headers=h, params={"path": "../t.csv"})
+        evil = c.delete(f"/sessions/{sid}/files", params={"path": "../t.csv"})
         assert evil.status_code == 400
 
 

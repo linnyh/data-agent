@@ -73,6 +73,19 @@ class Database:
             else None
         )
 
+    def ensure_local_user(self) -> str:
+        """本地单用户模式：返回固定本地用户的 user_id，不存在则创建。"""
+        user = self.get_user_by_username("local")
+        if user is not None:
+            return user["user_id"]
+        user_id = _new_id()
+        self._conn.execute(
+            "INSERT INTO users (user_id, username, password_hash) VALUES (?, ?, ?)",
+            (user_id, "local", ""),
+        )
+        self._conn.commit()
+        return user_id
+
     # -- 会话 -----------------------------------------------------------------
 
     def create_session(self, owner_id: str) -> str:

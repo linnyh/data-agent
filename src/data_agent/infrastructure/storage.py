@@ -82,6 +82,58 @@ class SessionStorage:
             tj.write_text('{"question": ""}', encoding="utf-8")
         return sdir
 
+    def set_first_question(self, session_id: str, question: str) -> None:
+        """记录首条分析目标（会话标题源）；仅首次写入，追问不覆盖。"""
+        import json
+
+        tj = self.session_dir(session_id) / "task.json"
+        try:
+            data = json.loads(tj.read_text(encoding="utf-8"))
+        except Exception:
+            data = {}
+        if not data.get("question"):
+            data["question"] = question
+            tj.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+
+    def first_question(self, session_id: str) -> str:
+        import json
+
+        tj = self.session_dir(session_id) / "task.json"
+        try:
+            data = json.loads(tj.read_text(encoding="utf-8"))
+        except Exception:
+            return ""
+        return (data.get("question") or "").strip()
+
+    def save_trace(self, session_id: str, entries: list) -> None:
+        """保存一轮对话的执行轨迹（节点/工具详情，debug 开关开启时收集）。"""
+        import json
+        import time
+
+        if not entries:
+            return
+        tdir = self.session_dir(session_id) / "traces"
+        tdir.mkdir(exist_ok=True)
+        path = tdir / f"{int(time.time() * 1000)}.json"
+        path.write_text(
+            json.dumps(entries, ensure_ascii=False, default=str), encoding="utf-8"
+        )
+
+    def list_traces(self, session_id: str) -> list[list]:
+        """按时间正序返回该会话全部执行轨迹（每轮一条）。"""
+        import json
+
+        tdir = self.session_dir(session_id) / "traces"
+        if not tdir.is_dir():
+            return []
+        out: list[list] = []
+        for f in sorted(tdir.glob("*.json")):
+            try:
+                out.append(json.loads(f.read_text(encoding="utf-8")))
+            except Exception:
+                continue
+        return out
+
     def cleanup_expired(self, ttl_seconds: float) -> int:
         """清理超过 TTL 未活动的会话目录；返回清理数。"""
         removed = 0

@@ -29,7 +29,7 @@
 - 🔧 **ReAct 求解**：只读 SQL 探查 + 沙箱代码执行，失败自动重试，兜底直跑
 - 📈 **自动图表**：解读结果时自动附图（bar/line/pie/scatter），霓虹主题、导出 PNG
 - 💬 **多轮记忆**：会话历史注入，支持追问迭代与口径重算
-- 🔐 **用户隔离**：bcrypt + JWT，会话级权限（他人会话 403）
+- 🏠 **本地单用户**：无登录流程，打开即用（所有会话归属本地用户）
 - ⚡ **节点级进度**：SSE 实时推送执行阶段
 - 🎨 **明暗主题**：深色霓虹 / 浅色，跟随系统，localStorage 持久化
 
@@ -130,9 +130,7 @@ tests/                # 单测 + 冒烟 + 标注集（benchmark/）
 
 | 端点 | 说明 |
 |------|------|
-| `POST /auth/register` | `{username, password}` → `{token, user_id}` |
-| `POST /auth/login` | 同上（已注册用户） |
-| `POST /sessions` | 创建会话（需 `Authorization: Bearer <token>`，下同） |
+| `POST /sessions` | 创建会话（本地单用户模式，无认证） |
 | `GET /sessions` | 列出当前用户的会话 |
 | `POST /sessions/{id}/upload` | multipart 上传数据文件（csv/json/sqlite/md/pdf/mp4），按扩展名分类落盘 |
 | `GET /sessions/{id}/files` | 列出会话已上传文件（路径相对会话目录） |
@@ -141,7 +139,7 @@ tests/                # 单测 + 冒烟 + 标注集（benchmark/）
 | `GET /sessions/{id}/result` | 最近一次分析结果（从 checkpoint 状态读取） |
 | `GET /sessions/{id}/history` | 会话历史：每轮问答记录（ADR-0005，checkpoint 为事实源） |
 
-会话间用户级隔离：访问他人会话返回 403，不存在返回 404。
+本地单用户模式：所有会话归属固定本地用户（首次请求自动创建），无登录流程；会话不存在返回 404。
 
 ## 🔭 可观测性（LangSmith）
 

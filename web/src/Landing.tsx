@@ -12,12 +12,10 @@ export default function Landing({
   busy,
   error,
   onStart,
-  onLogout,
 }: {
   busy: boolean;
   error: string;
   onStart: (text: string, files: File[]) => void;
-  onLogout: () => void;
 }) {
   const [input, setInput] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -43,14 +41,6 @@ export default function Landing({
 
   return (
     <div className="relative flex h-screen flex-col">
-      {/* 右上角退出（与全局主题开关同侧） */}
-      <button
-        onClick={onLogout}
-        className="absolute top-4 right-[4.75rem] z-10 rounded-lg border border-edge bg-panel/70 px-3 py-2 text-xs text-fg-faint backdrop-blur transition hover:border-cyan-400/40 hover:text-accent-fg"
-      >
-        退出
-      </button>
-
       {/* 中央内容 */}
       <div className="flex flex-1 flex-col items-center justify-center px-5 pb-10">
         <Logo className="h-14 w-14" />

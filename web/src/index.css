@@ -27,6 +27,7 @@
   --animate-blink: blink 1.1s step-end infinite;
   --animate-scan: scan 1.6s linear infinite;
   --animate-input-drop: input-drop 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-panel-in: panel-in 0.25s ease-out both;
 }
 
 /* 深色为默认色域：修复原生滚动条/表单控件渲染（须在 .light 之前） */
@@ -71,6 +72,18 @@
   }
   55% {
     opacity: 1;
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 会话历史卡片：淡入 + 轻微位移 */
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
   }
   to {
     opacity: 1;

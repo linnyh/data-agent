@@ -317,12 +317,12 @@ async def run_plan_agent_async(
             question = ""
 
     if knowledge_md is None:
-        knowledge_md = tools_v2.describe_tool.read_knowledge(task_dir, "context")
+        knowledge_md = describe_tool.read_knowledge(task_dir, "context")
 
     if video_text is None:
         video_text = _load_video_text(task_dir, video_max_chars)
 
-    context_desc = tools_v2.describe_tool.describe_context_dir(
+    context_desc = describe_tool.describe_context_dir(
         task_dir, "context", skip_knowledge=True
     )
 

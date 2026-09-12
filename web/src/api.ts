@@ -1,6 +1,4 @@
-// API 封装：token 管理、fetch 调用、SSE 流解析（共识 #10：localStorage JWT）
-
-const TOKEN_KEY = "da_token";
+// API 封装：fetch 调用、SSE 流解析（本地单用户模式，无认证）
 
 export type ChartSpec = {
   type: "bar" | "line" | "pie" | "scatter";
@@ -19,9 +17,25 @@ export type ResultEvent = {
   chart?: ChartSpec | null;
 };
 export type ClarificationEvent = { type: "clarification"; question: string };
-export type ProgressEvent = { type: "progress"; stage: string };
+export type TraceDetail = { node: string; input: unknown; output: unknown };
+export type ProgressEvent = {
+  type: "progress";
+  stage: string;
+  detail?: TraceDetail | null;
+  skipped?: boolean;
+};
+export type ToolEvent = {
+  type: "tool";
+  node: string;
+  detail: { tool: string; kind: "call" | "result"; args?: unknown; content?: unknown };
+};
 export type ErrorEvent = { type: "error"; detail: string };
-export type ChatEvent = ResultEvent | ClarificationEvent | ProgressEvent | ErrorEvent;
+export type ChatEvent =
+  | ResultEvent
+  | ClarificationEvent
+  | ProgressEvent
+  | ToolEvent
+  | ErrorEvent;
 
 export type HistoryRecord = {
   question: string;
@@ -31,36 +45,22 @@ export type HistoryRecord = {
   total_rows: number | null;
   status: string;
   chart?: ChartSpec | null;
+  trace?: {
+    stage: string;
+    detail: TraceDetail;
+    skipped?: boolean;
+    tools?: { tool: string; args?: unknown; content?: unknown }[];
+  }[] | null;
 };
-
-let token = localStorage.getItem(TOKEN_KEY) || "";
-
-export function setToken(t: string) {
-  token = t;
-  localStorage.setItem(TOKEN_KEY, t);
-}
-export function clearToken() {
-  token = "";
-  localStorage.removeItem(TOKEN_KEY);
-}
-export function hasToken() {
-  return !!token;
-}
 
 async function api<T>(path: string, opts: RequestInit = {}): Promise<T> {
   const res = await fetch(path, {
     ...opts,
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
       ...(opts.headers || {}),
     },
   });
-  if (res.status === 401) {
-    clearToken();
-    window.dispatchEvent(new Event("da:unauthorized"));
-    throw new Error("未认证");
-  }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.detail || `请求失败 (${res.status})`);
@@ -71,17 +71,14 @@ async function api<T>(path: string, opts: RequestInit = {}): Promise<T> {
 export async function* chatStream(
   sessionId: string,
   body: { question: string; resume?: string },
+  signal?: AbortSignal,
 ): AsyncGenerator<ChatEvent> {
   const res = await fetch(`/sessions/${sessionId}/chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+    signal,
   });
-  if (res.status === 401) {
-    clearToken();
-    window.dispatchEvent(new Event("da:unauthorized"));
-    throw new Error("未认证");
-  }
   if (!res.ok) throw new Error(`请求失败 (${res.status})`);
   const reader = res.body!.getReader();
   const decoder = new TextDecoder();
@@ -100,22 +97,12 @@ export async function* chatStream(
   }
 }
 
-export const apiRegister = (username: string, password: string) =>
-  api<{ token: string; user_id: string }>("/auth/register", {
-    method: "POST",
-    body: JSON.stringify({ username, password }),
-  });
-
-export const apiLogin = (username: string, password: string) =>
-  api<{ token: string; user_id: string }>("/auth/login", {
-    method: "POST",
-    body: JSON.stringify({ username, password }),
-  });
-
 export const apiCreateSession = () =>
   api<{ session_id: string }>("/sessions", { method: "POST" });
 
-export const apiListSessions = () => api<{ sessions: string[] }>("/sessions");
+export type SessionInfo = { session_id: string; title: string };
+
+export const apiListSessions = () => api<{ sessions: SessionInfo[] }>("/sessions");
 
 export const apiHistory = (sessionId: string) =>
   api<{ history: HistoryRecord[] }>(`/sessions/${sessionId}/history`);
@@ -136,14 +123,8 @@ export async function uploadFile(sessionId: string, file: File): Promise<string>
   fd.append("file", file);
   const res = await fetch(`/sessions/${sessionId}/upload`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
     body: fd,
   });
-  if (res.status === 401) {
-    clearToken();
-    window.dispatchEvent(new Event("da:unauthorized"));
-    throw new Error("未认证");
-  }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.detail || `上传失败 (${res.status})`);

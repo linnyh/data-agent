@@ -6,10 +6,11 @@ import {
   apiListFiles,
   apiListSessions,
   chatStream,
-  clearToken,
   HistoryRecord,
   ResultEvent,
+  SessionInfo,
   toCsv,
+  TraceDetail,
   UploadedFile,
   uploadFile,
 } from "./api";
@@ -20,12 +21,15 @@ import Logo from "./Logo";
 type Message =
   | { kind: "user"; text: string }
   | { kind: "agent"; text: string } // clarify 提问
-  | { kind: "result"; data: ResultEvent };
+  | { kind: "result"; data: ResultEvent; trace?: TraceEntry[] };
+
+type ToolPair = { tool: string; args?: unknown; content?: unknown };
+type TraceEntry = { stage: string; detail: TraceDetail; skipped?: boolean; tools?: ToolPair[] };
 
 const MAX_TABLE_ROWS = 50;
 
 export default function Chat() {
-  const [sessions, setSessions] = useState<string[]>([]);
+  const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [current, setCurrent] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [files, setFiles] = useState<UploadedFile[]>([]);
@@ -37,8 +41,29 @@ export default function Chat() {
   const [starting, setStarting] = useState(false);
   // 从首页隐式创建进入：触发输入卡下落动画
   const [fromLanding, setFromLanding] = useState(false);
+  // 会话历史抽屉（首页与聊天视图共用）
+  const [historyOpen, setHistoryOpen] = useState(false);
+  // 实时执行轨迹（thinking 期间渲染；result 后转入结果气泡折叠区）
+  const [liveTrace, setLiveTrace] = useState<TraceEntry[]>([]);
+  const liveTraceRef = useRef<TraceEntry[]>([]);
+  const pendingToolsRef = useRef<ToolPair[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  // 会话切换竞态防护：序号守卫 + 中止进行中的 SSE 流
+  const sendSeq = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
+
+  // 切换会话/回首页：使进行中的流失效（迟到事件不再写入新视图）
+  const invalidateStream = () => {
+    sendSeq.current++;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setThinking(false);
+    setStage(null);
+    setLiveTrace([]);
+    liveTraceRef.current = [];
+    pendingToolsRef.current = [];
+  };
 
   useEffect(() => {
     apiListSessions().then((r) => setSessions(r.sessions)).catch(() => {});
@@ -61,6 +86,7 @@ export default function Chat() {
   }, [input]);
 
   const openSession = async (sid: string) => {
+    invalidateStream();
     setCurrent(sid);
     setPendingClarify(null);
     setError("");
@@ -83,6 +109,7 @@ export default function Chat() {
               attempts: 0,
               chart: rec.chart ?? null,
             },
+            trace: rec.trace && rec.trace.length ? (rec.trace as TraceEntry[]) : undefined,
           } as Message,
         ]),
       );
@@ -96,6 +123,7 @@ export default function Chat() {
 
   // 显式新建：回到首页，首条分析目标发送时才隐式创建会话
   const newSession = () => {
+    invalidateStream();
     setCurrent(null);
     setMessages([]);
     setFiles([]);
@@ -129,7 +157,7 @@ export default function Chat() {
     setError("");
     try {
       const { session_id } = await apiCreateSession();
-      setSessions((s) => [session_id, ...s]);
+      setSessions((s) => [{ session_id, title: text.slice(0, 24) }, ...s]);
       setCurrent(session_id);
       setFromLanding(true);
       await doSend(session_id, text, files);
@@ -158,6 +186,12 @@ export default function Chat() {
 
   const doSend = async (sid: string, question: string, uploads: File[], resume?: string) => {
     if (!question.trim() || thinking) return;
+    // 本次请求的序号与 AbortController：会话切换后失效
+    const seq = ++sendSeq.current;
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const alive = () => seq === sendSeq.current;
+
     setInput("");
     setError("");
     setStage(null);
@@ -166,42 +200,150 @@ export default function Chat() {
     setMessages((m) => [...m, { kind: "user", text: question }]);
     if (resume) setPendingClarify(null);
     for (const f of uploads) {
+      if (!alive()) return;
       try {
         const path = await uploadFile(sid, f);
+        if (!alive()) return;
         setFiles((fs) => [...fs, { filename: f.name, path }]);
       } catch (err) {
+        if (!alive()) return;
         setError(err instanceof Error ? err.message : String(err));
       }
     }
+    // 执行轨迹实时化：progress/tool 事件即时入状态，thinking 期间可见
+    setLiveTrace([]);
+    liveTraceRef.current = [];
+    pendingToolsRef.current = [];
     try {
-      for await (const ev of chatStream(sid, { question, resume })) {
+      for await (const ev of chatStream(sid, { question, resume }, controller.signal)) {
+        if (!alive()) return;
         if (ev.type === "clarification") {
           setPendingClarify(ev.question);
           setMessages((m) => [...m, { kind: "agent", text: ev.question }]);
         } else if (ev.type === "result") {
-          setMessages((m) => [...m, { kind: "result", data: ev }]);
+          setMessages((m) => [
+            ...m,
+            {
+              kind: "result",
+              data: ev,
+              trace: liveTraceRef.current.length ? [...liveTraceRef.current] : undefined,
+            },
+          ]);
         } else if (ev.type === "progress") {
           setStage(ev.stage);
+          if (ev.detail) {
+            // 工具调用先于所属节点 progress 到达：缓存挂到新节点条目内
+            const entry: TraceEntry = { stage: ev.stage, detail: ev.detail, skipped: ev.skipped };
+            if (pendingToolsRef.current.length) entry.tools = [...pendingToolsRef.current];
+            pendingToolsRef.current = [];
+            setLiveTrace((t) => {
+              const next = [...t, entry];
+              liveTraceRef.current = next;
+              return next;
+            });
+          }
+        } else if (ev.type === "tool") {
+          const d = ev.detail;
+          if (d.kind === "call") {
+            pendingToolsRef.current.push({ tool: d.tool, args: d.args });
+          } else {
+            // 结果配对到最近一个同名未完成的调用
+            const last = [...pendingToolsRef.current]
+              .reverse()
+              .find((t) => t.tool === d.tool && t.content === undefined);
+            if (last) last.content = d.content;
+            else pendingToolsRef.current.push({ tool: d.tool, content: d.content });
+          }
         } else {
           setError(ev.detail);
         }
       }
     } catch (err) {
+      if (!alive()) return;
       setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setThinking(false);
+      if (alive()) setThinking(false);
     }
   };
 
-  const logout = () => {
-    clearToken();
-    window.dispatchEvent(new Event("da:unauthorized"));
-  };
+  // 会话历史抽屉：左上角按钮 + 滑入面板（首页与聊天视图共用）
+  const historyUI = (
+    <>
+      <button
+        onClick={() => setHistoryOpen((v) => !v)}
+        title="会话历史"
+        aria-label="会话历史"
+        className="fixed left-4 top-4 z-50 rounded-lg border border-edge bg-panel/70 p-2 text-fg-muted backdrop-blur transition hover:text-accent-fg"
+      >
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          aria-hidden="true"
+        >
+          <path d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+      {historyOpen && (
+        <>
+          <aside className="fixed bottom-4 left-4 top-16 z-50 flex w-64 animate-panel-in flex-col rounded-2xl border border-edge bg-panel/95 shadow-[0_8px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl">
+            <div className="flex items-center gap-2.5 border-b border-edge p-4">
+              <Logo className="h-6 w-6" />
+              <span className="text-[15px] font-bold tracking-wide">
+                <span className="text-gradient">数枢</span>
+              </span>
+            </div>
+            <button
+              onClick={() => {
+                newSession();
+                setHistoryOpen(false);
+              }}
+              className="btn-primary m-3 rounded-lg py-2 text-sm font-semibold text-white"
+            >
+              + 新建会话
+            </button>
+            <div className="flex-1 overflow-y-auto px-2 pb-2">
+              {sessions.map((s) => {
+                // 兼容旧后端字符串响应（重启后端后不会再出现）
+                const sid = typeof s === "string" ? s : s.session_id;
+                const title = typeof s === "string" ? "" : s.title;
+                return (
+                  <button
+                    key={sid}
+                    onClick={() => {
+                      openSession(sid);
+                      setHistoryOpen(false);
+                    }}
+                    className={`w-full truncate border-l-2 px-3 py-2.5 text-left text-[13px] transition ${
+                      current === sid
+                        ? "border-cyan-400 bg-cyan-400/10 text-accent-fg"
+                        : "border-transparent text-fg-faint hover:bg-fg-strong/4 hover:text-fg-strong"
+                    }`}
+                  >
+                    {title || sid.slice(0, 12)}
+                  </button>
+                );
+              })}
+            </div>
+          </aside>
+        </>
+      )}
+    </>
+  );
 
-  // 首页：无当前会话（登录后首屏 / 点击"新建会话"后）
+  // 首页：无当前会话（首屏 / 点击"新建会话"后）
   if (!current) {
     return (
-      <Landing busy={starting} error={error} onStart={startFromLanding} onLogout={logout} />
+      <>
+        {historyUI}
+        <div className={`transition-[margin] duration-300 ${historyOpen ? "ml-72" : ""}`}>
+          <Landing busy={starting} error={error} onStart={startFromLanding} />
+        </div>
+      </>
     );
   }
 
@@ -218,47 +360,14 @@ export default function Chat() {
 
   return (
     <div className="flex h-screen animate-fade-up">
-      {/* 左侧会话栏 */}
-      <aside className="flex w-60 shrink-0 flex-col border-r border-edge bg-panel/60 backdrop-blur-xl">
-        <div className="flex items-center justify-between border-b border-edge p-4">
-          <div className="flex items-center gap-2.5">
-            <Logo className="h-6 w-6" />
-            <span className="text-[15px] font-bold tracking-wide">
-              <span className="text-gradient">数枢</span>
-            </span>
-          </div>
-          <button
-            onClick={logout}
-            className="text-xs text-fg-faint transition hover:text-accent-fg"
-          >
-            退出
-          </button>
-        </div>
-        <button
-          onClick={newSession}
-          className="btn-primary m-3 rounded-lg py-2 text-sm font-semibold text-white"
-        >
-          + 新建会话
-        </button>
-        <div className="flex-1 overflow-y-auto px-2 pb-2">
-          {sessions.map((sid) => (
-            <button
-              key={sid}
-              onClick={() => openSession(sid)}
-              className={`w-full truncate border-l-2 px-3 py-2.5 text-left font-mono text-[13px] transition ${
-                current === sid
-                  ? "border-cyan-400 bg-cyan-400/10 text-accent-fg"
-                  : "border-transparent text-fg-faint hover:bg-fg-strong/4 hover:text-fg-strong"
-              }`}
-            >
-              {sid.slice(0, 12)}
-            </button>
-          ))}
-        </div>
-      </aside>
+      {historyUI}
 
-      {/* 右侧聊天区 */}
-      <main className="relative flex min-w-0 flex-1 flex-col">
+      {/* 聊天区：历史面板展开时右移让位 */}
+      <main
+        className={`relative flex min-w-0 flex-1 flex-col transition-[margin] duration-300 ${
+          historyOpen ? "ml-72" : ""
+        }`}
+      >
         {/* 消息流：内层右移 9px（滚动条宽度）放滚动条，内容列与输入卡严格同宽 */}
         <div className="flex-1 overflow-hidden px-5 py-6 pb-64">
           <div className="h-full w-[calc(100%+9px)] overflow-y-auto pr-[9px]">
@@ -280,25 +389,33 @@ export default function Chat() {
                 </div>
               </div>
             ) : (
-              <ResultBubble key={i} data={m.data} onDownload={() => downloadCsv(m.data)} />
+              <ResultBubble
+                key={i}
+                data={m.data}
+                trace={m.trace}
+                onDownload={() => downloadCsv(m.data)}
+              />
             ),
           )}
           {thinking && (
-            <div className="flex justify-start" aria-live="polite">
-              <div className="relative overflow-hidden rounded-2xl rounded-bl-md border border-cyan-400/20 bg-panel/80 px-4 py-2.5 font-mono text-sm text-accent-fg/80 shadow-[0_0_18px_rgba(34,211,238,0.08)]">
-                {stage ? (
-                  <>
-                    <span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
-                    {stage}…<span className="animate-blink">▍</span>
-                  </>
-                ) : (
-                  <>
-                    Agent 思考中<span className="animate-blink">▍</span>
-                  </>
-                )}
-                <span className="scanline" />
+            <>
+              <div className="flex justify-start" aria-live="polite">
+                <div className="relative overflow-hidden rounded-2xl rounded-bl-md border border-cyan-400/20 bg-panel/80 px-4 py-2.5 font-mono text-sm text-accent-fg/80 shadow-[0_0_18px_rgba(34,211,238,0.08)]">
+                  {stage ? (
+                    <>
+                      <span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
+                      {stage}…<span className="animate-blink">▍</span>
+                    </>
+                  ) : (
+                    <>
+                      Agent 思考中<span className="animate-blink">▍</span>
+                    </>
+                  )}
+                  <span className="scanline" />
+                </div>
               </div>
-            </div>
+              <TracePanel trace={liveTrace} />
+            </>
           )}
           {error && (
             <p className="px-1 font-mono text-sm text-danger-fg" role="alert">
@@ -436,7 +553,15 @@ export default function Chat() {
   );
 }
 
-function ResultBubble({ data, onDownload }: { data: ResultEvent; onDownload: () => void }) {
+function ResultBubble({
+  data,
+  trace,
+  onDownload,
+}: {
+  data: ResultEvent;
+  trace?: TraceEntry[];
+  onDownload: () => void;
+}) {
   const rows = data.rows.slice(0, MAX_TABLE_ROWS);
   const total = data.total_rows ?? data.rows.length;
   return (
@@ -504,6 +629,81 @@ function ResultBubble({ data, onDownload }: { data: ResultEvent; onDownload: () 
             </div>
           </>
         )}
+        {trace && trace.length > 0 && <TracePanel trace={trace} collapsed />}
+      </div>
+    </div>
+  );
+}
+
+function TracePanel({ trace, collapsed = false }: { trace: TraceEntry[]; collapsed?: boolean }) {
+  if (!trace.length) return null;
+  const nodes = (
+    <div className="space-y-1.5">
+      {trace.map((t, i) =>
+        t.skipped ? (
+          <div
+            key={i}
+            className="rounded-md border border-edge/40 bg-ink/20 px-2.5 py-1 font-mono text-[11px] text-fg-faint"
+          >
+            ⏭ {t.stage} <span className="opacity-60">({t.detail.node} · 无数据，跳过)</span>
+          </div>
+        ) : (
+        <details key={i} className="rounded-md border border-edge/60 bg-ink/40 px-2.5 py-1.5">
+          <summary className="cursor-pointer select-none font-mono text-[11px] text-accent-fg/80">
+            {t.stage} <span className="text-fg-faint">({t.detail.node})</span>
+            {t.tools && t.tools.length > 0 && (
+              <span className="text-fg-faint"> · {t.tools.length} 次工具调用</span>
+            )}
+          </summary>
+          <pre className="mt-1.5 max-h-48 overflow-auto whitespace-pre-wrap font-mono text-[10px] leading-relaxed text-fg-muted">
+{JSON.stringify({ input: t.detail.input, output: t.detail.output }, null, 2)}
+          </pre>
+          {t.tools && t.tools.length > 0 && (
+            <div className="mt-1.5 space-y-1 border-t border-edge/50 pt-1.5">
+              {t.tools.map((tp, j) => (
+                <div key={j} className="rounded border border-cyan-400/10 bg-cyan-400/5 px-2 py-1">
+                  <div className="font-mono text-[10px] text-accent-fg/80">🔧 {tp.tool}</div>
+                  {tp.args !== undefined && (
+                    <pre className="mt-0.5 max-h-32 overflow-auto whitespace-pre-wrap font-mono text-[10px] leading-relaxed text-fg-muted">
+{JSON.stringify(tp.args, null, 2)}
+                    </pre>
+                  )}
+                  {tp.content !== undefined && (
+                    <div className="mt-0.5 max-h-32 overflow-auto whitespace-pre-wrap font-mono text-[10px] leading-relaxed text-fg-faint">
+                      ↩ {String(tp.content).slice(0, 400)}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </details>
+        ),
+      )}
+    </div>
+  );
+
+  if (collapsed) {
+    return (
+      <div className="border-t border-edge/70 px-4 py-2.5">
+        <details>
+          <summary className="cursor-pointer select-none font-mono text-xs text-fg-muted transition hover:text-accent-fg">
+            ▸ 执行轨迹（{trace.length} 个节点）
+          </summary>
+          <div className="mt-2">{nodes}</div>
+        </details>
+      </div>
+    );
+  }
+
+  // 实时模式：thinking 期间随节点完成即时渲染
+  return (
+    <div className="flex justify-start">
+      <div className="w-full max-w-[88%] min-w-0 rounded-2xl rounded-bl-md border border-edge/70 bg-panel/70 px-3 py-2.5">
+        <p className="mb-1.5 font-mono text-[10px] tracking-[0.3em] text-accent-fg/70">
+          TRACE
+        </p>
+        {nodes}
       </div>
     </div>
   );

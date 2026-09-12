@@ -38,6 +38,9 @@ class AssetPlanner:
                 question=goal.text,
                 knowledge_md=knowledge,
             )
-        except Exception:
-            return ""
+        except Exception as e:
+            # 失败原因显性化：随规划文本展示（执行轨迹里可见），不静默吞掉
+            return f"(规划生成失败: {type(e).__name__}: {e})"
+        if res.error:
+            return f"(规划生成失败: {res.error})"
         return res.plan_md or ""
