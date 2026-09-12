@@ -72,3 +72,8 @@ tmp/
 node_modules/
 web/dist/
 *.tsbuildinfo
+
+# ---- 面试文档(仅本地,不提交) ----
+docs/agent-technical-guide.md
+docs/interview-walkthrough.md
+docs/algorithm-analysis.md
