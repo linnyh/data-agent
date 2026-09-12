@@ -67,6 +67,22 @@ cd web && npm run dev                       # 终端 2：http://localhost:5173�
 uv run python scripts/chat_cli.py --files 数据.csv    # 或进入后 /upload <文件>
 ```
 
+### Docker 部署（单容器，前端 + API 同源）
+
+```bash
+docker build -t datapivot .
+
+docker run -d --name datapivot -p 8000:8000 \
+  -v datapivot-data:/app/data \
+  -e MODEL_API_URL=https://api.deepseek.com \
+  -e MODEL_API_KEY=sk-xxx \
+  -e MODEL_NAME=deepseek-v4-flash \
+  datapivot
+```
+
+- 数据目录 `/app/data`(会话文件/checkpoint/用户库)通过 volume 持久化
+- 镜像内已含前端构建产物与视频资产依赖(ffmpeg/whisper),无需额外安装
+
 ## 🏗 架构
 
 ```
