@@ -29,6 +29,26 @@ from data_agent.infrastructure.db import Database
 from data_agent.infrastructure.storage import SessionStorage
 
 
+def _ensure_jwt_secret(data_dir: Path) -> None:
+    """dev 环境无 DATA_AGENT_JWT_SECRET 时，把随机密钥持久化到数据目录。
+
+    保证重启后端后已签发 token 仍有效（登录态不丢）；
+    生产环境应显式设置 DATA_AGENT_JWT_SECRET 环境变量。
+    """
+    if os.environ.get("DATA_AGENT_JWT_SECRET"):
+        return
+    secret_file = data_dir / ".jwt_secret"
+    if secret_file.is_file():
+        secret = secret_file.read_text(encoding="utf-8").strip()
+        if secret:
+            os.environ["DATA_AGENT_JWT_SECRET"] = secret
+            return
+    import secrets
+
+    os.environ["DATA_AGENT_JWT_SECRET"] = secrets.token_hex(32)
+    secret_file.write_text(os.environ["DATA_AGENT_JWT_SECRET"], encoding="utf-8")
+
+
 async def build_application():
     # 数据目录锚定仓库根（与 .env 读取一致），不依赖进程启动目录
     data_dir = Path(
@@ -38,6 +58,7 @@ async def build_application():
         )
     ).resolve()
     data_dir.mkdir(parents=True, exist_ok=True)
+    _ensure_jwt_secret(data_dir)
 
     db = Database(data_dir / "app.db")
     db.connect()

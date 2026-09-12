@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -330,6 +331,24 @@ def test_plan_node_feeds_solver(tmp_path: Path):
         assert planner.calls == 1
         assert dedup_judger.calls == 1
         assert pre_agent.calls == 1
+
+
+def test_jwt_secret_persisted(tmp_path: Path, monkeypatch):
+    """dev 密钥持久化：重启（环境变量丢失）后仍读到同一密钥；显式设置时不动。"""
+    from data_agent.infrastructure.main import _ensure_jwt_secret
+
+    monkeypatch.delenv("DATA_AGENT_JWT_SECRET", raising=False)
+    _ensure_jwt_secret(tmp_path)
+    first = os.environ["DATA_AGENT_JWT_SECRET"]
+    assert (tmp_path / ".jwt_secret").is_file()
+
+    monkeypatch.delenv("DATA_AGENT_JWT_SECRET", raising=False)
+    _ensure_jwt_secret(tmp_path)
+    assert os.environ["DATA_AGENT_JWT_SECRET"] == first
+
+    monkeypatch.setenv("DATA_AGENT_JWT_SECRET", "custom-secret")
+    _ensure_jwt_secret(tmp_path)
+    assert os.environ["DATA_AGENT_JWT_SECRET"] == "custom-secret"
 
 
 def test_files_list_and_delete(tmp_path: Path):
