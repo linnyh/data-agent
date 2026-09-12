@@ -72,6 +72,17 @@ class FakePlanner:
         return self.PLAN
 
 
+class FakeDedupJudger:
+    ADVICE = "## 去重口径建议\n最终结果**应**按目标输出列去重。"
+
+    def __init__(self):
+        self.calls = 0
+
+    async def judge(self, *, goal, task_dir, knowledge=""):
+        self.calls += 1
+        return self.ADVICE
+
+
 class FakeDocExtractor:
     async def extract(self, *, task_dir, log_dir, relevant_stems=None) -> DocExtractResult:
         return DocExtractResult(db_path=task_dir / "context" / "db", tables=["a"])
@@ -270,15 +281,17 @@ def test_user_isolation(client: TestClient):
 
 
 def test_plan_node_feeds_solver(tmp_path: Path):
-    """规划节点在求解前产出规划并注入 solver；追问轮复用规划不重复调用。"""
+    """规划节点在求解前产出规划与去重建议并注入 solver；追问轮复用不重复调用。"""
     solver = FakeSolver()
     planner = FakePlanner()
+    dedup_judger = FakeDedupJudger()
     graph = PipelineGraphBuilder(
         solver=solver,
         doc_extractor=FakeDocExtractor(),
         video_preprocessor=FakeVideoPreprocessor(),
         llm=FakeLLM(need_clarification=False),
         planner=planner,
+        dedup_judger=dedup_judger,
     ).build()
     db = _make_db(tmp_path / "app.db")
     storage = SessionStorage(tmp_path / "sessions")
@@ -292,12 +305,14 @@ def test_plan_node_feeds_solver(tmp_path: Path):
         r1 = c.post(f"/sessions/{sid}/chat", headers=h, json={"question": "每月订单量"})
         assert _sse_events(r1.text)[-1]["type"] == "result"
         assert planner.calls == 1
-        assert solver.last_plan == FakePlanner.PLAN
+        assert dedup_judger.calls == 1
+        assert solver.last_plan == f"{FakePlanner.PLAN}\n\n{FakeDedupJudger.ADVICE}"
 
-        # 追问：同 thread 复用 checkpoint 中的规划，不再调用 planner
+        # 追问：同 thread 复用 checkpoint 中的规划，不再调用 planner / judger
         r2 = c.post(f"/sessions/{sid}/chat", headers=h, json={"question": "换个口径重算"})
         assert _sse_events(r2.text)[-1]["type"] == "result"
         assert planner.calls == 1
+        assert dedup_judger.calls == 1
 
 
 def test_files_list_and_delete(tmp_path: Path):

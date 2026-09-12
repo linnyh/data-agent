@@ -10,6 +10,7 @@ import os
 from data_agent.adapters.judges import DocRelevanceJudge, TableRelevanceJudge
 from data_agent.adapters.models import OpenAICompatibleLLM
 from data_agent.adapters.pipeline import (
+    AssetDedupJudger,
     AssetDocExtractor,
     AssetPlanner,
     AssetVideoPreprocessor,
@@ -49,6 +50,7 @@ class Container:
         self.video_preprocessor = AssetVideoPreprocessor()
         self.video_result_judge = AssetVideoResultJudge()
         self.planner = AssetPlanner()
+        self.dedup_judger = AssetDedupJudger()
 
         # 求解域
         self.sandbox = SubprocessSolverSandbox()
@@ -61,6 +63,7 @@ class Container:
             video_preprocessor=self.video_preprocessor,
             llm=self.llm_nothink,
             planner=self.planner,
+            dedup_judger=self.dedup_judger,
             video_result_judge=self.video_result_judge,
             doc_relevance_judge=self.doc_relevance_judge,
             table_relevance_judge=self.table_relevance_judge,

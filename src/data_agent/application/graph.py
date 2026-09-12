@@ -26,6 +26,7 @@ from data_agent.application.state import PipelineState
 from data_agent.domain.judges import IRelevanceJudge
 from data_agent.domain.llm import ILLM
 from data_agent.domain.pipeline import (
+    IDedupJudger,
     IDocExtractor,
     IPlanner,
     IVideoPreprocessor,
@@ -57,6 +58,7 @@ class PipelineGraphBuilder:
         video_preprocessor: IVideoPreprocessor,
         llm: ILLM | None = None,
         planner: IPlanner | None = None,
+        dedup_judger: IDedupJudger | None = None,
         video_result_judge: IVideoResultJudge | None = None,
         doc_relevance_judge: IRelevanceJudge | None = None,
         table_relevance_judge: IRelevanceJudge | None = None,
@@ -68,6 +70,7 @@ class PipelineGraphBuilder:
         self._video_preprocessor = video_preprocessor
         self._llm = llm
         self._planner = planner
+        self._dedup_judger = dedup_judger
         self._video_result_judge = video_result_judge
         self._doc_relevance_judge = doc_relevance_judge
         self._table_relevance_judge = table_relevance_judge
@@ -230,17 +233,31 @@ class PipelineGraphBuilder:
     async def _plan(self, state: PipelineState) -> dict[str, Any]:
         if "plan" in state:  # 幂等：追问复用已算规划
             return {}
-        if self._planner is None:
-            return {"plan": ""}
-        try:
-            plan = await self._planner.plan(
-                goal=state["goal"],
-                task_dir=Path(state["task_dir"]),
-                knowledge=state.get("knowledge", ""),
-            )
-        except Exception:
-            plan = ""
-        return {"plan": plan}
+        # 解题规划 + 去重口径建议，合并注入 solver
+        parts: list[str] = []
+        if self._planner is not None:
+            try:
+                parts.append(
+                    await self._planner.plan(
+                        goal=state["goal"],
+                        task_dir=Path(state["task_dir"]),
+                        knowledge=state.get("knowledge", ""),
+                    )
+                )
+            except Exception:
+                pass
+        if self._dedup_judger is not None:
+            try:
+                parts.append(
+                    await self._dedup_judger.judge(
+                        goal=state["goal"],
+                        task_dir=Path(state["task_dir"]),
+                        knowledge=state.get("knowledge", ""),
+                    )
+                )
+            except Exception:
+                pass
+        return {"plan": "\n\n".join(p for p in parts if p.strip())}
 
     async def _solve(self, state: PipelineState) -> dict[str, Any]:
         outcome = await self._solver.solve(

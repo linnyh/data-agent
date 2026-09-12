@@ -104,3 +104,20 @@ class IPlanner(Protocol):
     ) -> str:
         """返回解题规划 markdown；无规划/失败时返回空串。"""
         ...
+
+
+class IDedupJudger(Protocol):
+    """去重口径判定：最终结果是否应按目标输出列去重（多轮投票）。
+
+    输出建议文本并入解题规划注入 solver；失败返回空串不阻塞。
+    """
+
+    async def judge(
+        self,
+        *,
+        goal: AnalysisGoal,
+        task_dir: Path,
+        knowledge: str = "",
+    ) -> str:
+        """返回去重口径建议文本；失败时返回空串。"""
+        ...
