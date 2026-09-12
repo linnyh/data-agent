@@ -30,7 +30,7 @@
 - 📈 **自动图表**：解读结果时自动附图（bar/line/pie/scatter），霓虹主题、导出 PNG
 - 💬 **多轮记忆**：会话历史注入，支持追问迭代与口径重算
 - 🏠 **本地单用户**：无登录流程，打开即用（所有会话归属本地用户）
-- ⚡ **节点级进度**：SSE 实时推送执行阶段
+- ⚡ **节点级进度**：SSE 实时推送执行阶段；可选开启执行轨迹（`DATA_AGENT_DEBUG_TRACE=1`）——实时展示每个节点的输入/输出与 solve 内部工具调用，结果气泡可折叠审计，历史回放可恢复
 - 🎨 **明暗主题**：深色霓虹 / 浅色，跟随系统，localStorage 持久化
 
 ## 🖥 界面预览
@@ -131,13 +131,13 @@ tests/                # 单测 + 冒烟 + 标注集（benchmark/）
 | 端点 | 说明 |
 |------|------|
 | `POST /sessions` | 创建会话（本地单用户模式，无认证） |
-| `GET /sessions` | 列出当前用户的会话 |
+| `GET /sessions` | 列出会话（含首问标题） |
 | `POST /sessions/{id}/upload` | multipart 上传数据文件（csv/json/sqlite/md/pdf/mp4），按扩展名分类落盘 |
 | `GET /sessions/{id}/files` | 列出会话已上传文件（路径相对会话目录） |
 | `DELETE /sessions/{id}/files?path=` | 按路径删除已上传文件 |
 | `POST /sessions/{id}/chat` | `{question, resume?}` → SSE 流：`clarification`（Agent 提问）/ `progress`（执行阶段）/ `result`（叙述+表格+图表）/ `error`；收到 clarification 后带 `resume` 重调续跑 |
 | `GET /sessions/{id}/result` | 最近一次分析结果（从 checkpoint 状态读取） |
-| `GET /sessions/{id}/history` | 会话历史：每轮问答记录（ADR-0005，checkpoint 为事实源） |
+| `GET /sessions/{id}/history` | 会话历史：每轮问答记录（含图表规格与执行轨迹；ADR-0005，checkpoint 为事实源） |
 
 本地单用户模式：所有会话归属固定本地用户（首次请求自动创建），无登录流程；会话不存在返回 404。
 
