@@ -423,6 +423,7 @@ class FileDescriber:
         *,
         skip_knowledge: bool = False,
         collapse_keys: "set[str] | None" = None,
+        per_file_chars: int | None = None,
     ) -> str:
         full_dir = _resolve(base_path, rel_dir)
         chunks = [f"# Context directory: {rel_dir}", ""]
@@ -435,9 +436,14 @@ class FileDescriber:
                 full = os.path.join(root, name)
                 rel = os.path.relpath(full, base_path)
                 try:
-                    chunks.append(self.describe_file(base_path, rel, collapse_keys=collapse_keys))
+                    desc = self.describe_file(base_path, rel, collapse_keys=collapse_keys)
                 except Exception as e:
                     chunks.append(f"[ERROR] {rel}: {e!r}")
+                    continue
+                if per_file_chars and len(desc) > per_file_chars:
+                    # 头部(文件名/列名)在前,截断只丢样例行;保证每个文件都被列出
+                    desc = desc[:per_file_chars] + "\n…(描述截断,完整 schema 可后续查询)"
+                chunks.append(desc)
                 chunks.append("")
         return "\n".join(chunks)
 

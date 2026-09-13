@@ -53,6 +53,8 @@ class IDataSourceDescriber(Protocol):
         *,
         skip_knowledge: bool = False,
         collapse_keys: set[str] | None = None,
+        per_file_chars: int | None = None,
     ) -> str:
-        """遍历目录生成描述；collapse_keys 中的表只渲染一行折叠提示（软过滤）。"""
+        """遍历目录生成描述；collapse_keys 中的表只渲染一行折叠提示（软过滤）；
+        per_file_chars 限制单文件描述长度（截断样例行，保证每个文件都被列出）。"""
         ...

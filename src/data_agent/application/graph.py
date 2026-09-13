@@ -36,7 +36,9 @@ from data_agent.domain.pipeline import (
 )
 from data_agent.domain.solver import ISolver
 
-_CLARIFY_PREVIEW_CHARS = 3000
+_CLARIFY_PREVIEW_CHARS = 8000
+# 每文件预览上限:列名/schema 在前,截断只丢样例行;保证多文件时每个文件都可见
+_CLARIFY_PREVIEW_PER_FILE = 800
 
 
 def _collapse_keys_for(registry: DuckDBDataSourceRegistry, skipped: set[str]) -> set[str]:
@@ -142,7 +144,10 @@ class PipelineGraphBuilder:
             return {}
         task_dir = Path(state["task_dir"])
         preview = FileDescriber().describe_context_dir(
-            task_dir, "context", skip_knowledge=True
+            task_dir,
+            "context",
+            skip_knowledge=True,
+            per_file_chars=_CLARIFY_PREVIEW_PER_FILE,
         )[:_CLARIFY_PREVIEW_CHARS]
         return await clarify_node(state, llm=self._llm, context_preview=preview)
 
