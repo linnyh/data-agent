@@ -21,6 +21,9 @@
 
 ## ✨ 特性
 
+- 🖥 **macOS 桌面 App**：DataPivot.app 双击即用（Tauri 壳 + Python sidecar，whisper/ffmpeg 内置离线），原生标题栏、系统亮暗跟随、侧边栏布局
+- ⚙️ **App 内配置**：设置页编辑模型 API/视频模型/LangSmith 配置，保存立即生效
+- 💡 **快捷指令**：上传文件后按列结构自动生成分析建议（点击填入输入框），「换一批」耗尽规则池后由模型增强
 - 🤖 **对话式分析**：自然语言提问，Agent 自动澄清歧义，全自动执行分析
 - 📊 **多模态数据源**：结构化数据（csv/json/sqlite）+ 文档（md/pdf）+ 视频简报，统一注册进 DuckDB 只读查询
 - 🧭 **先规划后求解**：求解前由规划 Agent 带只读探查实查口径/量纲/去重假设，产出解题规划供 solver 参考
@@ -31,7 +34,7 @@
 - 💬 **多轮记忆**：会话历史注入，支持追问迭代与口径重算
 - 🏠 **本地单用户**：无登录流程，打开即用（所有会话归属本地用户）
 - ⚡ **节点级进度**：SSE 实时推送执行阶段；可选开启执行轨迹（`DATA_AGENT_DEBUG_TRACE=1`）——实时展示每个节点的输入/输出与 solve 内部工具调用，结果气泡可折叠审计，历史回放可恢复
-- 🎨 **明暗主题**：深色霓虹 / 浅色，跟随系统，localStorage 持久化
+- 🎨 **明暗主题**：macOS 语义色（深色/浅色），跟随系统，localStorage 持久化
 
 ## 🖥 界面预览
 
@@ -41,6 +44,19 @@
 </p>
 
 ## 🚀 快速开始
+
+### macOS 桌面 App（双击即用）
+
+```bash
+./desktop/scripts/build-sidecar.sh   # 1. PyInstaller 打包 Python 服务（含 whisper/ffmpeg/前端）
+./desktop/scripts/build-app.sh       # 2. Tauri 构建 DataPivot.app（ad-hoc 签名）
+./desktop/scripts/make-dmg.sh        # 3. 可选：生成 dmg
+```
+
+- 双击 `DataPivot.app` 即用：自动拉起本地服务（端口 8765 起自动避让），窗口加载同源前端
+- 首次启动生成 `~/Library/Application Support/DataPivot/`（数据目录 + `.env` 配置模板）
+- 模型配置在 App 内设置页（右上角齿轮）填写，保存立即生效
+- 验收脚本：`./desktop/scripts/e2e-m1.sh`（完整跑通一次上传分析）
 
 ### 生产模式（单端口：前端 + API 同源）
 
@@ -111,15 +127,16 @@ src/data_agent/
 │   └── solver_agent.py# create_react_agent + attempt 循环
 ├── assets/            # 内置算法资产（文档结构化引擎、视频预处理组件、评分器等）
 └── infrastructure/    # 技术设施
-    ├── api/app.py     # FastAPI：auth/sessions/upload/chat(SSE)/result
-    ├── auth.py        # bcrypt + JWT + 用户级隔离
+    ├── api/app.py     # FastAPI：sessions/upload/chat(SSE)/result/settings/suggestions
     ├── db.py          # 用户/会话持久化（SQLite）
     ├── storage.py     # 会话目录 + 上传分类落盘 + TTL 清理
     ├── checkpoint.py  # AsyncSqliteSaver（thread_id=会话 ID）
+    ├── suggestions.py # 快捷指令生成（规则模板 + LLM 增强）
     ├── container.py   # 依赖注入根
     └── main.py        # 服务入口
 
 web/                  # React 前端（Vite + TS + Tailwind + ECharts）
+desktop/              # macOS 桌面壳（Tauri）与 PyInstaller 打包（sidecar 生命周期/端口探测/SIGTERM 清理）
 scripts/              # 终端对话 CLI
 tests/                # 单测 + 冒烟 + 标注集（benchmark/）
 ```
@@ -138,6 +155,8 @@ tests/                # 单测 + 冒烟 + 标注集（benchmark/）
 | `POST /sessions/{id}/chat` | `{question, resume?}` → SSE 流：`clarification`（Agent 提问）/ `progress`（执行阶段）/ `result`（叙述+表格+图表）/ `error`；收到 clarification 后带 `resume` 重调续跑 |
 | `GET /sessions/{id}/result` | 最近一次分析结果（从 checkpoint 状态读取） |
 | `GET /sessions/{id}/history` | 会话历史：每轮问答记录（含图表规格与执行轨迹；ADR-0005，checkpoint 为事实源） |
+| `GET /sessions/{id}/suggestions?offset=` | 快捷指令：按文件列结构生成候选分析目标；offset 超规则池后由模型增强 |
+| `GET /settings` / `PUT /settings` | 模型配置读写（.env 白名单键），保存立即生效并落盘 |
 
 本地单用户模式：所有会话归属固定本地用户（首次请求自动创建），无登录流程；会话不存在返回 404。
 
@@ -159,7 +178,7 @@ LANGSMITH_PROJECT=data-agent
 ## 🧪 测试
 
 ```bash
-uv run pytest tests/ -q          # 全量（89 测试）
+uv run pytest tests/ -q          # 全量（91 测试）
 ```
 
 覆盖：领域模型 / DuckDB 与内置参考实现逐字节对齐 / 投票聚合语义 / 求解沙箱三态 /
