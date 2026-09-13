@@ -223,7 +223,9 @@ def _normalize_base_url(url: str) -> str:
 
 def _setup_default_model_env():
     """Inject local default model env while keeping docker fully env-driven."""
-    if is_docker():
+    if is_docker() or getattr(sys, "frozen", False):
+        # 桌面打包(frozen)不带开发机内网默认模型:未配置时由下游报
+        # "MODEL_API_URL 未配置" 的清晰错误,而非打内网 IP 得到莫名 502。
         return
     os.environ.setdefault("MODEL_API_URL", DEFAULT_MODEL_API_URL)
     os.environ.setdefault("MODEL_API_KEY", DEFAULT_MODEL_API_KEY)

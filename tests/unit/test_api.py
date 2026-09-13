@@ -118,6 +118,7 @@ def client(tmp_path: Path):
     db.connect()
     storage = SessionStorage(tmp_path / "sessions")
     app = create_app(db=db, storage=storage, graph=graph)
+    app.state.data_dir = tmp_path
     with TestClient(app) as c:
         yield c
 
@@ -337,3 +338,32 @@ def _make_db(path: Path) -> Database:
     db = Database(path)
     db.connect()
     return db
+
+
+def test_settings_get_and_put(client: TestClient, tmp_path):
+    # GET 返回白名单键(未配置为空串)
+    settings = client.get("/settings").json()
+    assert set(settings) == {
+        "MODEL_API_URL", "MODEL_API_KEY", "MODEL_NAME",
+        "VIDEO_MODEL_NAME", "VIDEO_MODEL_API_URL", "VIDEO_MODEL_API_KEY",
+        "LANGSMITH_TRACING", "LANGSMITH_API_KEY", "LANGSMITH_PROJECT",
+    }
+
+    # PUT 保存:运行时生效 + 落盘 .env
+    r = client.put("/settings", json={"values": {"MODEL_NAME": "m-x", "LANGSMITH_TRACING": "true"}})
+    assert r.status_code == 200
+    assert r.json()["saved"] == ["LANGSMITH_TRACING", "MODEL_NAME"]
+    assert os.environ["MODEL_NAME"] == "m-x"
+    env_file = tmp_path / ".env"
+    assert env_file.is_file()
+    assert "MODEL_NAME=m-x" in env_file.read_text(encoding="utf-8")
+
+    # 空值 = 删除配置(环境变量与文件行)
+    r = client.put("/settings", json={"values": {"LANGSMITH_TRACING": ""}})
+    assert r.status_code == 200
+    assert "LANGSMITH_TRACING" not in os.environ
+    assert "LANGSMITH_TRACING" not in env_file.read_text(encoding="utf-8")
+
+    # 未知键拒绝
+    r = client.put("/settings", json={"values": {"HACK": "1"}})
+    assert r.status_code == 422

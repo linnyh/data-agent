@@ -30,6 +30,24 @@ class ChatRequest(BaseModel):
     resume: str | None = None
 
 
+class SettingsUpdate(BaseModel):
+    values: dict[str, str]
+
+
+# 设置页可配置的环境变量白名单（与桌面 .env 模板一致）
+SETTINGS_KEYS = (
+    "MODEL_API_URL",
+    "MODEL_API_KEY",
+    "MODEL_NAME",
+    "VIDEO_MODEL_NAME",
+    "VIDEO_MODEL_API_URL",
+    "VIDEO_MODEL_API_KEY",
+    "LANGSMITH_TRACING",
+    "LANGSMITH_API_KEY",
+    "LANGSMITH_PROJECT",
+)
+
+
 # -- 依赖 --------------------------------------------------------------------
 
 
@@ -80,6 +98,29 @@ def _require_session_access(db: Database, session_id: str, user_id: str) -> None
         raise HTTPException(status_code=404, detail="会话不存在")
     if owner != user_id:
         raise HTTPException(status_code=403, detail="无权访问该会话")
+
+
+def _persist_env(env_path: Path | None, updates: dict[str, str]) -> None:
+    """把更新写回 .env：已有行改值（注释与顺序保留），空值删行，新键追加到末尾。"""
+    if env_path is None:
+        return
+    lines = env_path.read_text(encoding="utf-8").splitlines() if env_path.is_file() else []
+    updated: set[str] = set()
+    out: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#") and "=" in stripped:
+            key = stripped.split("=", 1)[0].strip()
+            if key in updates:
+                if updates[key]:
+                    out.append(f"{key}={updates[key]}")
+                updated.add(key)
+                continue
+        out.append(line)
+    for key, value in updates.items():
+        if key not in updated and value:
+            out.append(f"{key}={value}")
+    env_path.write_text("\n".join(out) + "\n", encoding="utf-8")
 
 
 # -- 工厂 --------------------------------------------------------------------
@@ -431,5 +472,28 @@ def create_app(
         for i, rec in enumerate(records):
             rec["trace"] = traces[i] if i < len(traces) else None
         return {"history": records}
+
+    # -- 设置（桌面 App .env 配置页） ------------------------------------------
+
+    @app.get("/settings")
+    def get_settings():
+        return {k: os.environ.get(k, "") for k in SETTINGS_KEYS}
+
+    @app.put("/settings")
+    def update_settings(req: SettingsUpdate):
+        unknown = set(req.values) - set(SETTINGS_KEYS)
+        if unknown:
+            raise HTTPException(status_code=422, detail=f"未知配置项: {', '.join(sorted(unknown))}")
+        updates = {k: v.strip() for k, v in req.values.items()}
+        # 运行时立即生效（模型工厂每次请求读 os.environ），同时落盘 .env 持久化；
+        # 空值 = 删除该配置
+        for k, v in updates.items():
+            if v:
+                os.environ[k] = v
+            else:
+                os.environ.pop(k, None)
+        data_dir = getattr(app.state, "data_dir", None)
+        _persist_env(Path(data_dir) / ".env" if data_dir else None, updates)
+        return {"ok": True, "saved": sorted(updates)}
 
     return app

@@ -63,6 +63,7 @@ async def build_application():
     app = create_app(db=db, storage=storage, graph=graph)
     app.state.db = db
     app.state.checkpointer = checkpointer
+    app.state.data_dir = data_dir  # 设置端点持久化 .env 用
 
     # 前端 build 产物托管（共识 #4：生产单端口同源）。dist 不存在时跳过（纯 API 模式）。
     from fastapi.staticfiles import StaticFiles

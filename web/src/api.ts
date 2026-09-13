@@ -68,6 +68,14 @@ async function api<T>(path: string, opts: RequestInit = {}): Promise<T> {
   return res.json();
 }
 
+export const apiGetSettings = () => api<Record<string, string>>("/settings");
+
+export const apiSaveSettings = (values: Record<string, string>) =>
+  api<{ ok: boolean; saved: string[] }>("/settings", {
+    method: "PUT",
+    body: JSON.stringify({ values }),
+  });
+
 export async function* chatStream(
   sessionId: string,
   body: { question: string; resume?: string },

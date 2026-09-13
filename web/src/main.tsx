@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import Chat from "./Chat";
+import Settings from "./Settings";
 import ThemeToggle, { applyTheme, currentPref } from "./ThemeToggle";
 import "@fontsource/space-grotesk/400.css";
 import "@fontsource/space-grotesk/500.css";
@@ -19,6 +20,7 @@ function App() {
       <div className="orb orb-a" />
       <div className="orb orb-b" />
       <ThemeToggle />
+      <Settings />
       <Chat />
     </>
   );

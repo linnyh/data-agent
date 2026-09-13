@@ -14,6 +14,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Manager, RunEvent, Url};
+use tauri_plugin_log::{Target, TargetKind};
 
 const PORT_START: u16 = 8765;
 const PORT_TRIES: u16 = 20;
@@ -229,13 +230,19 @@ fn stop_sidecar(state: &Arc<Mutex<SidecarState>>) {
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
-            if cfg!(debug_assertions) {
-                app.handle().plugin(
-                    tauri_plugin_log::Builder::default()
-                        .level(log::LevelFilter::Info)
-                        .build(),
-                )?;
-            }
+            // 日志落盘 ~/Library/Logs/com.datapivot.desktop/(§4.1 日志落盘),
+            // dev 与 release 一致,便于用户排障
+            app.handle().plugin(
+                tauri_plugin_log::Builder::default()
+                    .targets([
+                        Target::new(TargetKind::LogDir {
+                            file_name: Some("datapivot".into()),
+                        }),
+                        Target::new(TargetKind::Stdout),
+                    ])
+                    .level(log::LevelFilter::Info)
+                    .build(),
+            )?;
             let port =
                 find_free_port(PORT_START, PORT_TRIES).ok_or("8765 起的 20 个端口均被占用")?;
             let data_dir = app_support_dir(app.handle())?;
