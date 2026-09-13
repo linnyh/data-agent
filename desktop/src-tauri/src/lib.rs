@@ -10,11 +10,26 @@ use std::net::{TcpListener, TcpStream};
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Manager, RunEvent, Url};
 use tauri_plugin_log::{Target, TargetKind};
+
+/// 当前 sidecar 进程组 id(信号处理器用:async-signal-safe 只做 killpg)
+static SIDECAR_PGID: AtomicI32 = AtomicI32::new(0);
+
+/// SIGTERM(pkill/系统注销/关机)时清理 sidecar 进程组后退出。
+/// Tauri 不处理 SIGTERM,默认直接终止会孤儿化 sidecar;kill/_exit 均
+/// async-signal-safe,可在信号上下文中调用。
+extern "C" fn handle_sigterm(_sig: i32) {
+    let pgid = SIDECAR_PGID.load(Ordering::SeqCst);
+    if pgid > 0 {
+        unsafe { libc::kill(-pgid, libc::SIGTERM) };
+    }
+    unsafe { libc::_exit(0) };
+}
 
 const PORT_START: u16 = 8765;
 const PORT_TRIES: u16 = 20;
@@ -162,6 +177,7 @@ async fn supervise(app: AppHandle, state: Arc<Mutex<SidecarState>>, data_dir: Pa
             }
         };
         state.lock().unwrap().pid = Some(child.id());
+        SIDECAR_PGID.store(child.id() as i32, Ordering::SeqCst);
         log::info!("sidecar 已启动 pid={} port={port}", child.id());
 
         // 等待就绪(HTTP 探活)或进程早夭
@@ -202,6 +218,7 @@ async fn supervise(app: AppHandle, state: Arc<Mutex<SidecarState>>, data_dir: Pa
         if stopping {
             let mut s = state.lock().unwrap();
             s.pid = None;
+            SIDECAR_PGID.store(0, Ordering::SeqCst);
             log::info!("sidecar 已停止,监督任务结束");
             return;
         }
@@ -213,6 +230,7 @@ async fn supervise(app: AppHandle, state: Arc<Mutex<SidecarState>>, data_dir: Pa
         }
         log::error!("sidecar 连续崩溃,放弃重启");
         state.lock().unwrap().pid = None;
+        SIDECAR_PGID.store(0, Ordering::SeqCst);
         return;
     }
 }
@@ -235,6 +253,7 @@ fn stop_sidecar(state: &Arc<Mutex<SidecarState>>) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    unsafe { libc::signal(libc::SIGTERM, handle_sigterm as *const () as usize) };
     tauri::Builder::default()
         .setup(|app| {
             // 日志落盘 ~/Library/Logs/com.datapivot.desktop/(§4.1 日志落盘),
