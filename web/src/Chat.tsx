@@ -47,6 +47,8 @@ export default function Chat() {
   // 快捷指令:后端建议 + 换一批 offset
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [sugOffset, setSugOffset] = useState(0);
+  // file input 重挂载计数(WKWebView 二次选择修复)
+  const [uploadKey, setUploadKey] = useState(0);
   // 实时执行轨迹(thinking 期间渲染;result 后转入结果气泡折叠区)
   const [liveTrace, setLiveTrace] = useState<TraceEntry[]>([]);
   const liveTraceRef = useRef<TraceEntry[]>([]);
@@ -178,7 +180,8 @@ export default function Chat() {
       return;
     }
     const list = Array.from(e.target.files || []);
-    e.target.value = "";
+    // 重挂载 input:WKWebView 中 value 清空不可靠,新节点保证下次选择必然触发 change
+    setUploadKey((k) => k + 1);
     for (const f of list) {
       try {
         const path = await uploadFile(current, f);
@@ -198,6 +201,29 @@ export default function Chat() {
       setSessions((s) => [{ session_id, title: text.slice(0, 24) }, ...s]);
       setCurrent(session_id);
       await doSend(session_id, text, files);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  // 首页上传文件:隐式创建会话进入聊天视图,文字带入输入框,不自动分析
+  const startWithUploads = async (text: string, files: File[]) => {
+    setStarting(true);
+    setError("");
+    try {
+      const { session_id } = await apiCreateSession();
+      setSessions((s) => [
+        { session_id, title: text.slice(0, 24) || files[0]?.name || "新会话" },
+        ...s,
+      ]);
+      setCurrent(session_id);
+      setInput(text);
+      for (const f of files) {
+        const path = await uploadFile(session_id, f);
+        setFiles((fs) => [...fs, { filename: f.name, path }]);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -380,7 +406,12 @@ export default function Chat() {
           </button>
         )}
         {!current ? (
-          <Landing busy={starting} error={error} onStart={startFromLanding} />
+          <Landing
+            busy={starting}
+            error={error}
+            onStart={startFromLanding}
+            onUploadFiles={startWithUploads}
+          />
         ) : (
           <>
             {/* 消息流:内层右移 9px(滚动条宽度)放滚动条,内容列与输入卡严格同宽 */}
@@ -519,6 +550,7 @@ export default function Chat() {
                       <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
                     </svg>
                     <input
+                      key={uploadKey}
                       type="file"
                       multiple
                       className="sr-only"

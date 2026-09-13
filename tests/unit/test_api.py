@@ -251,12 +251,15 @@ def test_plan_node_feeds_solver(tmp_path: Path):
             f"{FakePlanner.PLAN}\n\n{FakeDedupJudger.ADVICE}\n\n{FakePreAgent.EXTRACT}"
         )
 
-        # 追问：同 thread 复用 checkpoint 中的规划，不再调用三个建议 agent
+        # 追问换目标：规划/建议 agent 重跑（语义修正：规划跟随当前分析目标）
         r2 = c.post(f"/sessions/{sid}/chat", json={"question": "换个口径重算"})
         assert _sse_events(r2.text)[-1]["type"] == "result"
-        assert planner.calls == 1
-        assert dedup_judger.calls == 1
-        assert pre_agent.calls == 1
+        assert planner.calls == 2
+        assert dedup_judger.calls == 2
+        assert pre_agent.calls == 2
+        assert solver.last_plan == (
+            f"{FakePlanner.PLAN}\n\n{FakeDedupJudger.ADVICE}\n\n{FakePreAgent.EXTRACT}"
+        )
 
 
 def test_is_skipped_node_semantics():

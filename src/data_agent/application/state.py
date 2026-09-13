@@ -34,8 +34,10 @@ class PipelineState(TypedDict, total=False):
     # 表过滤（软过滤：折叠 describe 的 key 集）
     collapse_keys: set[str] | None
 
-    # 解题规划（None=未跑；""=无需/失败）
+    # 解题规划（None=未跑；""=无需/失败）；plan_question 记录规划对应的分析目标，
+    # 追问（目标变化）时重跑规划，resume（同目标补澄清）时复用
     plan: str | None
+    plan_question: str
 
     # 求解
     outcome: SolveOutcome | None

@@ -213,14 +213,15 @@ class PipelineGraphBuilder:
         return {"doc_extract": res if res.db_path is not None else None}
 
     async def _table_relevance(self, state: PipelineState) -> dict[str, Any]:
-        if "collapse_keys" in state:  # 幂等
-            return {}
+        # 每轮重跑:上传/删除文件或追问跨文件时,相关表判定必须跟随当前
+        # 数据集与当前分析目标,不盲目复用 checkpoint(用户反馈的语义修正)
         if self._table_relevance_judge is None:
             return {"collapse_keys": None}
         registry = DuckDBDataSourceRegistry()
         registry.register_directory(Path(state["task_dir"]))
         candidates = build_table_candidates(registry)
-        if not candidates:
+        # 单表(含空)无筛选必要,短路省一次 LLM 判定
+        if len(candidates) <= 1:
             return {"collapse_keys": None}
         try:
             verdict = await self._table_relevance_judge.judge(
@@ -235,7 +236,8 @@ class PipelineGraphBuilder:
         return {"collapse_keys": _collapse_keys_for(registry, verdict.skipped)}
 
     async def _plan(self, state: PipelineState) -> dict[str, Any]:
-        if "plan" in state:  # 幂等：追问复用已算规划
+        # 同目标(如 resume 补澄清后重跑)复用已算规划;追问换目标则重跑
+        if state.get("plan") and state.get("plan_question") == state["goal"].text:
             return {}
         # 解题规划 + 去重口径建议 + 知识精选/输出形态建议：三者互不依赖，并发执行
         goal = state["goal"]
@@ -260,7 +262,10 @@ class PipelineGraphBuilder:
                 _safe(self._pre_agent.extract(goal=goal, task_dir=task_dir, knowledge=knowledge))
             )
         parts = await asyncio.gather(*tasks) if tasks else []
-        return {"plan": "\n\n".join(p for p in parts if p.strip())}
+        return {
+            "plan": "\n\n".join(p for p in parts if p.strip()),
+            "plan_question": goal.text,
+        }
 
     async def _solve(self, state: PipelineState) -> dict[str, Any]:
         outcome = await self._solver.solve(

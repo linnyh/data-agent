@@ -12,13 +12,17 @@ export default function Landing({
   busy,
   error,
   onStart,
+  onUploadFiles,
 }: {
   busy: boolean;
   error: string;
   onStart: (text: string, files: File[]) => void;
+  onUploadFiles: (text: string, files: File[]) => void;
 }) {
   const [input, setInput] = useState("");
-  const [files, setFiles] = useState<File[]>([]);
+  // 每次选择后重挂载 file input:WKWebView 中 value 清空不可靠,
+  // 新节点保证下次选择(含同一文件)必然触发 change
+  const [fileKey, setFileKey] = useState(0);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
   // textarea 随内容自适应高度(上限 max-h-72)
@@ -30,13 +34,16 @@ export default function Landing({
   }, [input]);
 
   const onPick = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFiles((fs) => [...fs, ...Array.from(e.target.files || [])]);
-    e.target.value = "";
+    const list = Array.from(e.target.files || []);
+    setFileKey((k) => k + 1);
+    if (list.length === 0) return;
+    // 上传即隐式创建会话进入聊天视图,当前输入文字一并带入
+    onUploadFiles(input, list);
   };
 
   const send = () => {
     if (!input.trim() || busy) return;
-    onStart(input, files);
+    onStart(input, []);
   };
 
   return (
@@ -52,37 +59,6 @@ export default function Landing({
 
         {/* 输入卡片 */}
         <div className="mt-8 w-full max-w-3xl rounded-2xl border border-edge bg-panel/90 p-3 shadow-sm backdrop-blur-xl transition focus-within:border-accent/50">
-          {files.length > 0 && (
-            <div className="mb-2 flex flex-wrap gap-1.5">
-              {files.map((f) => (
-                <span
-                  key={f.name + f.size}
-                  className="flex items-center gap-1.5 rounded-md border border-edge bg-accent-soft px-2.5 py-0.5 font-mono text-xs text-accent-fg"
-                >
-                  {f.name}
-                  <button
-                    onClick={() => setFiles((fs) => fs.filter((x) => x !== f))}
-                    title="移除文件"
-                    aria-label={`移除文件 ${f.name}`}
-                    className="flex h-4 w-4 items-center justify-center rounded-full transition hover:bg-danger-fg/25 hover:text-danger-fg"
-                  >
-                    <svg
-                      width="8"
-                      height="8"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="3.5"
-                      strokeLinecap="round"
-                      aria-hidden="true"
-                    >
-                      <path d="M18 6 6 18M6 6l12 12" />
-                    </svg>
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
           <textarea
             ref={taRef}
             rows={2}
@@ -122,6 +98,7 @@ export default function Landing({
                 <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
               </svg>
               <input
+                key={fileKey}
                 type="file"
                 multiple
                 className="sr-only"
