@@ -307,10 +307,22 @@ def create_app(
                         update = data[node]
                         detail = None
                         if debug_trace:
+                            output = _summarize(update)
+                            # table_relevance 输出语义化:collapse_keys 是"被排除的
+                            # 无关表"集合,直接展示 key 名会让人误以为是选中文件
+                            if node == "table_relevance" and isinstance(update, dict):
+                                collapsed = update.get("collapse_keys")
+                                if collapsed is None:
+                                    output = {"结论": "全部数据表保留参与分析"}
+                                else:
+                                    output = {
+                                        "结论": "以下文件判为与本题无关,已折叠描述(不参与分析)",
+                                        "无关文件": sorted(collapsed),
+                                    }
                             detail = {
                                 "node": node,
                                 "input": _summarize(prev_update or {}),
-                                "output": _summarize(update),
+                                "output": output,
                             }
                         prev_update = update
                         skipped = _is_skipped(node, update)
