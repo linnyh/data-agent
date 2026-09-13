@@ -169,13 +169,4 @@ label {
   filter: brightness(1.08);
 }
 
-/* Overlay 标题栏拖拽区 */
-.drag-region {
-  -webkit-app-region: drag;
-}
-
-.drag-region button,
-.drag-region input,
-.drag-region a {
-  -webkit-app-region: no-drag;
-}
+/* Overlay 标题栏拖拽区:data-tauri-drag-region 由壳处理(Tauri v2 官方方式) */

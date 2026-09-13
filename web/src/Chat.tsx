@@ -5,6 +5,7 @@ import {
   apiHistory,
   apiListFiles,
   apiListSessions,
+  apiSuggestions,
   chatStream,
   HistoryRecord,
   ResultEvent,
@@ -15,8 +16,7 @@ import {
   uploadFile,
 } from "./api";
 import ChartBox from "./ChartBox";
-import Landing from "./Landing";
-import Logo from "./Logo";
+import Landing, { SUGGESTIONS as STATIC_SUGGESTIONS } from "./Landing";
 import Settings from "./Settings";
 
 type Message =
@@ -40,6 +40,13 @@ export default function Chat() {
   const [stage, setStage] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [starting, setStarting] = useState(false);
+  // 侧边栏可见性(持久化)
+  const [sidebarOpen, setSidebarOpen] = useState(
+    () => localStorage.getItem("da:sidebar") !== "0",
+  );
+  // 快捷指令:后端建议 + 换一批 offset
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [sugOffset, setSugOffset] = useState(0);
   // 实时执行轨迹(thinking 期间渲染;result 后转入结果气泡折叠区)
   const [liveTrace, setLiveTrace] = useState<TraceEntry[]>([]);
   const liveTraceRef = useRef<TraceEntry[]>([]);
@@ -72,7 +79,15 @@ export default function Chat() {
       ? "auto"
       : "smooth";
     bottomRef.current?.scrollIntoView({ behavior });
-  }, [messages, thinking]);
+    // liveTrace:思考中轨迹面板随节点增高,滚动跟随到底部
+  }, [messages, thinking, liveTrace]);
+
+  const toggleSidebar = () => {
+    setSidebarOpen((v) => {
+      localStorage.setItem("da:sidebar", v ? "0" : "1");
+      return !v;
+    });
+  };
 
   // textarea 随内容自适应高度(上限 max-h-72)
   useEffect(() => {
@@ -81,6 +96,34 @@ export default function Chat() {
     el.style.height = "auto";
     el.style.height = Math.min(el.scrollHeight, 288) + "px";
   }, [input]);
+
+  // 快捷指令:有文件 → 后端按结构生成;无文件 → 本地静态建议
+  useEffect(() => {
+    if (!current) {
+      setSuggestions([]);
+      return;
+    }
+    setSugOffset(0);
+    if (files.length === 0) {
+      setSuggestions(STATIC_SUGGESTIONS);
+      return;
+    }
+    apiSuggestions(current, 0)
+      .then((r) => setSuggestions(r.suggestions))
+      .catch(() => setSuggestions(STATIC_SUGGESTIONS));
+  }, [current, files]);
+
+  const moreSuggestions = async () => {
+    if (!current || files.length === 0) return;
+    const next = sugOffset + 4;
+    setSugOffset(next);
+    try {
+      const r = await apiSuggestions(current, next);
+      setSuggestions(r.suggestions);
+    } catch {
+      // 拉取失败保持当前建议
+    }
+  };
 
   const openSession = async (sid: string) => {
     invalidateStream();
@@ -271,18 +314,12 @@ export default function Chat() {
     URL.revokeObjectURL(a.href);
   };
 
-  const currentTitle =
-    sessions.find((s) => (typeof s === "string" ? s : s.session_id) === current)?.title ?? "新会话";
-
   return (
     <div className="flex h-screen overflow-hidden rounded-[10px]">
-      {/* 侧边栏:标题栏(拖拽) + 新建 + 会话列表 + 设置 */}
+      {/* 侧边栏:新建 + 会话列表 + 设置 + 折叠(窗口标题栏由系统提供) */}
+      {sidebarOpen && (
       <aside className="flex w-60 shrink-0 flex-col border-r border-edge bg-panel/80">
-        <div className="drag-region flex h-14 shrink-0 items-center gap-2.5 px-4">
-          <Logo className="h-6 w-6" />
-          <span className="text-[15px] font-semibold tracking-wide text-fg-strong">数枢</span>
-        </div>
-        <div className="px-3">
+        <div className="px-3 pt-3">
           <button
             onClick={newSession}
             className="btn-primary w-full rounded-lg py-1.5 text-[13px] font-medium text-white"
@@ -314,28 +351,40 @@ export default function Chat() {
             <p className="px-3 py-2 text-xs text-fg-faint">暂无会话</p>
           )}
         </div>
-        <div className="border-t border-edge p-2">
+        <div className="flex items-center border-t border-edge p-1.5">
           <Settings
-            triggerClassName="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[13px] text-fg-muted transition hover:bg-ink/50 hover:text-fg"
+            triggerClassName="flex flex-1 items-center gap-2 rounded-lg px-3 py-2 text-[13px] text-fg-muted transition hover:bg-ink/50 hover:text-fg"
           />
+          <button
+            onClick={toggleSidebar}
+            title="隐藏侧边栏"
+            aria-label="隐藏侧边栏"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-fg-muted transition hover:bg-ink/50 hover:text-fg"
+          >
+            <ChevronLeftIcon />
+          </button>
         </div>
       </aside>
+      )}
 
       {/* 主区 */}
       <main className="relative flex min-w-0 flex-1 flex-col bg-ink">
-        {/* 顶部标题栏:Overlay 拖拽区,显示当前会话标题 */}
-        <div className="drag-region flex h-14 shrink-0 items-center justify-center border-b border-edge/60">
-          <span className="text-[13px] font-medium text-fg-muted">
-            {current ? currentTitle : "数枢 · 数据分析助手"}
-          </span>
-        </div>
-
+        {!sidebarOpen && (
+          <button
+            onClick={toggleSidebar}
+            title="显示侧边栏"
+            aria-label="显示侧边栏"
+            className="absolute left-3 top-3 z-40 flex h-8 w-8 items-center justify-center rounded-lg border border-edge bg-panel/90 text-fg-muted shadow-sm backdrop-blur transition hover:text-fg"
+          >
+            <SidebarIcon />
+          </button>
+        )}
         {!current ? (
           <Landing busy={starting} error={error} onStart={startFromLanding} />
         ) : (
           <>
             {/* 消息流:内层右移 9px(滚动条宽度)放滚动条,内容列与输入卡严格同宽 */}
-            <div className="flex-1 overflow-hidden px-5 py-6 pb-40">
+            <div className="min-h-0 flex-1 overflow-hidden px-5 py-6">
               <div className="h-full w-[calc(100%+9px)] overflow-y-auto pr-[9px]">
                 <div className="mx-auto flex max-w-3xl flex-col gap-4">
                   {messages.map((m, i) =>
@@ -385,14 +434,14 @@ export default function Chat() {
               </div>
             </div>
 
-            {/* 悬浮输入卡片 */}
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col items-center gap-2.5 px-5 pb-5">
+            {/* 输入卡片:flex 流内底部,随自身高度占位,不与消息流重叠 */}
+            <div className="flex shrink-0 flex-col items-center gap-2.5 px-5 pb-5">
               {pendingClarify && (
                 <div className="w-full max-w-3xl rounded-lg border border-warn-edge bg-warn-soft px-4 py-2 font-mono text-xs text-warn-fg">
                   ▸ 请回答 Agent 的问题后发送(将作为澄清继续分析)
                 </div>
               )}
-              <div className="pointer-events-auto w-full max-w-3xl rounded-2xl border border-edge bg-panel/90 p-3 shadow-lg backdrop-blur-xl transition focus-within:border-accent/50">
+              <div className="w-full max-w-3xl rounded-2xl border border-edge bg-panel/90 p-3 shadow-sm backdrop-blur-xl transition focus-within:border-accent/50">
                 {files.length > 0 && (
                   <div className="mb-2 flex flex-wrap gap-1.5">
                     {files.map((f) => (
@@ -501,11 +550,55 @@ export default function Chat() {
                   </button>
                 </div>
               </div>
+
+              {/* 快捷指令:点击填入输入框,不自动发送 */}
+              {suggestions.length > 0 && (
+                <div className="flex w-full max-w-3xl flex-wrap items-center gap-1.5">
+                  {suggestions.map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => setInput(s)}
+                      disabled={thinking}
+                      className="rounded-full border border-edge bg-panel/80 px-3 py-1 text-xs text-fg-muted transition hover:border-accent/50 hover:text-accent-fg"
+                    >
+                      {s}
+                    </button>
+                  ))}
+                  {current && files.length > 0 && (
+                    <button
+                      onClick={moreSuggestions}
+                      disabled={thinking}
+                      title="换一批建议"
+                      aria-label="换一批建议"
+                      className="rounded-full border border-dashed border-edge px-3 py-1 text-xs text-fg-faint transition hover:border-accent/50 hover:text-accent-fg"
+                    >
+                      ↻ 换一批
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </>
         )}
       </main>
     </div>
+  );
+}
+
+function ChevronLeftIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m15 18-6-6 6-6" />
+    </svg>
+  );
+}
+
+function SidebarIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M9 4v16" />
+    </svg>
   );
 }
 
