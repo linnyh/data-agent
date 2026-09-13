@@ -82,11 +82,20 @@ class _VotingJudge(IRelevanceJudge):
         return f"### {c.name}\n{c.preview}"
 
     def _build_user_input(
-        self, *, question: str, knowledge: str, candidates: list[RelevanceCandidate]
+        self,
+        *,
+        question: str,
+        knowledge: str,
+        candidates: list[RelevanceCandidate],
+        history: str = "",
     ) -> str:
         blocks = [self._render_candidate(c) for c in candidates]
+        history_block = ""
+        if history.strip():
+            history_block = f"## 会话历史 (追问指代消解用)\n{(history or '').strip()[:4000]}\n\n"
         return (
             f"## task question\n{question}\n\n"
+            f"{history_block}"
             f"## knowledge\n{(knowledge or '').strip()[:8000] or '(本任务无 knowledge.md)'}\n\n"
             f"## 候选清单 (共 {len(candidates)} 个)\n" + "\n\n".join(blocks)
         )
@@ -99,11 +108,12 @@ class _VotingJudge(IRelevanceJudge):
         question: str,
         knowledge: str,
         candidates: list[RelevanceCandidate],
+        history: str = "",
         log_dir: Path | None = None,
     ) -> RelevanceVerdict:
         all_keys = {c.key for c in candidates}
         user_input = self._build_user_input(
-            question=question, knowledge=knowledge, candidates=candidates
+            question=question, knowledge=knowledge, candidates=candidates, history=history
         )
         instruction = self._instruction()
         schema = self._verdict_schema()

@@ -196,6 +196,7 @@ class PipelineGraphBuilder:
                 question=state["goal"].text,
                 knowledge=state.get("knowledge", ""),
                 candidates=candidates,
+                history=state.get("history", ""),
             )
         except Exception:
             return {"relevant_stems": {c.key for c in candidates}}
@@ -233,6 +234,7 @@ class PipelineGraphBuilder:
                 question=state["goal"].text,
                 knowledge=state.get("knowledge", ""),
                 candidates=candidates,
+                history=state.get("history", ""),
             )
         except Exception:
             return {"collapse_keys": None}

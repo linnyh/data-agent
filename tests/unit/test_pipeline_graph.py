@@ -61,7 +61,7 @@ class FakeRelevanceJudge:
     def __init__(self, skipped: set[str]):
         self._skipped = skipped
 
-    async def judge(self, *, question, knowledge, candidates, log_dir=None):
+    async def judge(self, *, question, knowledge, candidates, history="", log_dir=None):
         from data_agent.domain.judges import RelevanceVerdict
 
         all_keys = {c.key for c in candidates}
@@ -166,7 +166,7 @@ def test_pipeline_judge_failure_degrades(task_dir: Path):
     """判定失败 → 降级：不过滤（relevant_stems=None 语义 → 全相关）。"""
 
     class _BrokenJudge:
-        async def judge(self, *, question, knowledge, candidates, log_dir=None):
+        async def judge(self, *, question, knowledge, candidates, history="", log_dir=None):
             raise RuntimeError("boom")
 
     builder = PipelineGraphBuilder(

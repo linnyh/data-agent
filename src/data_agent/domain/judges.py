@@ -44,7 +44,9 @@ class IRelevanceJudge(Protocol):
         question: str,
         knowledge: str,
         candidates: list[RelevanceCandidate],
+        history: str = "",
         log_dir: Path | None = None,
     ) -> RelevanceVerdict:
-        """对 candidates 做多轮投票判定；任何失败按召回优先兜底。"""
+        """对 candidates 做多轮投票判定；任何失败按召回优先兜底。
+        history 为会话历史摘要，供追问轮指代消解（如"我说的是两个"）。"""
         ...
