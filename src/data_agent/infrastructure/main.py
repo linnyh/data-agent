@@ -78,7 +78,9 @@ def main() -> None:
     import uvicorn
 
     app = asyncio.run(build_application())
-    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("DATA_AGENT_PORT", "8000")))
+    # 默认 0.0.0.0(Docker/服务器部署);桌面壳注入 127.0.0.1 仅本机监听
+    host = os.environ.get("DATA_AGENT_HOST", "0.0.0.0")
+    uvicorn.run(app, host=host, port=int(os.environ.get("DATA_AGENT_PORT", "8000")))
 
 
 if __name__ == "__main__":

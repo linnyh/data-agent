@@ -47,7 +47,9 @@ struct SidecarState {
     restarts: u32,
 }
 
-/// 从 start 起探测空闲端口(bind 成功即空闲,listener 立即释放归还系统)
+/// 从 start 起探测空闲端口(bind 成功即空闲,listener 立即释放归还系统)。
+/// 与 sidecar 同绑 127.0.0.1(桌面场景仅本机监听):macOS 的通配/特定地址
+/// bind 互不冲突,探测语义必须与 sidecar 完全一致才不会误判。
 fn find_free_port(start: u16, tries: u16) -> Option<u16> {
     (start..start.saturating_add(tries))
         .find(|p| TcpListener::bind(("127.0.0.1", *p)).is_ok())
@@ -110,6 +112,7 @@ fn spawn_sidecar(binary: &Path, data_dir: &Path, port: u16) -> std::io::Result<C
     let mut cmd = Command::new(binary);
     cmd.env("DATA_AGENT_DATA_DIR", data_dir)
         .env("DATA_AGENT_PORT", port.to_string())
+        .env("DATA_AGENT_HOST", "127.0.0.1") // 仅本机监听,与端口探测语义一致
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .process_group(0);
@@ -130,23 +133,27 @@ fn spawn_sidecar(binary: &Path, data_dir: &Path, port: u16) -> std::io::Result<C
     Ok(child)
 }
 
-/// 监督任务:启动 → 等就绪 → 导航;进程退出后按策略重启或放弃
-async fn supervise(
-    app: AppHandle,
-    state: Arc<Mutex<SidecarState>>,
-    data_dir: PathBuf,
-    port: u16,
-) {
-    let url = match sidecar_url(port) {
-        Ok(u) => u,
-        Err(e) => {
-            log::error!("构造 sidecar URL 失败: {e}");
-            return;
-        }
-    };
+/// 监督任务:启动 → 等就绪 → 导航;进程退出后按策略重启或放弃。
+/// 每次 spawn(含崩溃重启)前重新探测端口:上一轮占用可能已变化
+/// (如启动失败时端口被别的进程抢走)。
+async fn supervise(app: AppHandle, state: Arc<Mutex<SidecarState>>, data_dir: PathBuf) {
     let binary = sidecar_binary(&app);
 
     loop {
+        let port = match find_free_port(PORT_START, PORT_TRIES) {
+            Some(p) => p,
+            None => {
+                log::error!("无空闲端口(8765 起 {PORT_TRIES} 个均被占用),放弃启动");
+                return;
+            }
+        };
+        let url = match sidecar_url(port) {
+            Ok(u) => u,
+            Err(e) => {
+                log::error!("构造 sidecar URL 失败: {e}");
+                return;
+            }
+        };
         let mut child = match spawn_sidecar(&binary, &data_dir, port) {
             Ok(c) => c,
             Err(e) => {
@@ -243,8 +250,6 @@ pub fn run() {
                     .level(log::LevelFilter::Info)
                     .build(),
             )?;
-            let port =
-                find_free_port(PORT_START, PORT_TRIES).ok_or("8765 起的 20 个端口均被占用")?;
             let data_dir = app_support_dir(app.handle())?;
             std::fs::create_dir_all(&data_dir)?;
             let env_path = data_dir.join(".env");
@@ -253,7 +258,7 @@ pub fn run() {
             }
             let state = Arc::new(Mutex::new(SidecarState::default()));
             app.manage(state.clone());
-            tauri::async_runtime::spawn(supervise(app.handle().clone(), state, data_dir, port));
+            tauri::async_runtime::spawn(supervise(app.handle().clone(), state, data_dir));
             Ok(())
         })
         .build(tauri::generate_context!())
@@ -277,6 +282,7 @@ mod tests {
 
     #[test]
     fn find_free_port_skips_taken_port() {
+        // 与 sidecar 同用 127.0.0.1 占位(探测语义必须与 sidecar 绑定一致)
         let taken = TcpListener::bind(("127.0.0.1", 0)).expect("bind 随机端口");
         let taken_port = taken.local_addr().expect("获取地址").port();
         let found = find_free_port(taken_port, 2);
