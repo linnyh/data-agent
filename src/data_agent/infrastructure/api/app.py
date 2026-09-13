@@ -20,6 +20,10 @@ from starlette.responses import StreamingResponse
 from data_agent.domain.models import AnalysisGoal
 from data_agent.infrastructure.db import Database
 from data_agent.infrastructure.storage import SessionStorage
+from data_agent.infrastructure.suggestions import (
+    llm_suggestions,
+    session_suggestions,
+)
 
 
 # -- 请求体 ------------------------------------------------------------------
@@ -131,6 +135,7 @@ def create_app(
     db: Database,
     storage: SessionStorage,
     graph,
+    llm=None,
 ) -> FastAPI:
     app = FastAPI(title="data-agent")
 
@@ -472,6 +477,24 @@ def create_app(
         for i, rec in enumerate(records):
             rec["trace"] = traces[i] if i < len(traces) else None
         return {"history": records}
+
+    # -- 快捷指令（按上传文件结构生成） ----------------------------------------
+
+    @app.get("/sessions/{session_id}/suggestions")
+    async def get_suggestions(
+        session_id: str,
+        offset: int = 0,
+        user_id: str = Depends(local_user),
+    ):
+        _require_session_access(db, session_id, user_id)
+        base = session_suggestions(storage, session_id, max(offset, 0))
+        # 规则池耗尽(offset 越界)且有模型 → LLM 增强;失败回退池首循环
+        if base["pool_size"] > 0 and base["offset"] >= base["pool_size"]:
+            sdir = storage.session_dir(session_id)
+            page = await llm_suggestions(llm, storage.list_uploads(session_id), sdir)
+            if page:
+                return {**base, "suggestions": page, "kind": "llm"}
+        return base
 
     # -- 设置（桌面 App .env 配置页） ------------------------------------------
 

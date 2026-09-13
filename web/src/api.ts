@@ -68,6 +68,19 @@ async function api<T>(path: string, opts: RequestInit = {}): Promise<T> {
   return res.json();
 }
 
+export type SuggestionsResponse = {
+  suggestions: string[];
+  kind: "rule" | "llm" | "generic";
+  offset: number;
+  pool_size: number;
+  has_files: boolean;
+};
+
+export const apiSuggestions = (sessionId: string, offset: number) =>
+  api<SuggestionsResponse>(
+    `/sessions/${sessionId}/suggestions?offset=${offset}`,
+  );
+
 export const apiGetSettings = () => api<Record<string, string>>("/settings");
 
 export const apiSaveSettings = (values: Record<string, string>) =>

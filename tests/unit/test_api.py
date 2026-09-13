@@ -367,3 +367,37 @@ def test_settings_get_and_put(client: TestClient, tmp_path):
     # 未知键拒绝
     r = client.put("/settings", json={"values": {"HACK": "1"}})
     assert r.status_code == 422
+
+
+def test_suggestions_rule_and_fallback(client: TestClient):
+    sid = client.post("/sessions").json()["session_id"]
+    up = client.post(
+        f"/sessions/{sid}/upload",
+        files={"file": ("t.csv", b"date,region,sales\n2024-01-01,EAST,100\n", "text/csv")},
+    )
+    assert up.status_code == 200
+
+    r = client.get(f"/sessions/{sid}/suggestions")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["has_files"] is True
+    assert body["kind"] == "rule"
+    assert body["pool_size"] > 0
+    assert 0 < len(body["suggestions"]) <= 4
+
+    # offset 越界:llm 未注入 → 回退规则池循环
+    r2 = client.get(f"/sessions/{sid}/suggestions?offset={body['pool_size'] + 4}")
+    b2 = r2.json()
+    assert b2["kind"] == "rule"
+    assert len(b2["suggestions"]) > 0
+
+    # 无文件会话:空建议(前端本地静态兜底)
+    sid2 = client.post("/sessions").json()["session_id"]
+    r3 = client.get(f"/sessions/{sid2}/suggestions")
+    assert r3.json() == {
+        "suggestions": [],
+        "kind": "rule",
+        "offset": 0,
+        "pool_size": 0,
+        "has_files": False,
+    }

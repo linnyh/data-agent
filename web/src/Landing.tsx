@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import Logo from "./Logo";
 
-const SUGGESTIONS = [
+export const SUGGESTIONS = [
   "分析各品类的销售额趋势",
   "找出销售额前 10 的产品",
   "对比不同地区的销售表现",

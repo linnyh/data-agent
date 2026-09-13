@@ -60,7 +60,7 @@ async def build_application():
     checkpointer = await build_checkpointer(data_dir / "checkpoints.db")
     graph = container.build_graph(checkpointer=checkpointer)
 
-    app = create_app(db=db, storage=storage, graph=graph)
+    app = create_app(db=db, storage=storage, graph=graph, llm=container.llm_nothink)
     app.state.db = db
     app.state.checkpointer = checkpointer
     app.state.data_dir = data_dir  # 设置端点持久化 .env 用
