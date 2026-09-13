@@ -28,15 +28,15 @@ function buildOption(c: ChartSpec) {
   const muted = cssVar("--color-fg-muted", "#94a3b8");
   const edge = cssVar("--color-edge", "#1b2942");
   const ink = cssVar("--color-ink", "#05070d");
-  const gridLine = light ? "rgba(15,23,42,0.08)" : "rgba(56,189,248,0.08)";
+  const gridLine = light ? "rgba(60,60,67,0.12)" : "rgba(255,255,255,0.08)";
 
   const base = {
     color: PALETTE,
     backgroundColor: "transparent",
-    textStyle: { color: fg, fontFamily: "JetBrains Mono, monospace" },
+    textStyle: { color: fg, fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace" },
     tooltip: {
       trigger: "axis" as const,
-      backgroundColor: light ? "#ffffff" : "#0a1122",
+      backgroundColor: light ? "#ffffff" : "#28282a",
       borderColor: edge,
       textStyle: { color: fg, fontSize: 12 },
     },
@@ -138,7 +138,7 @@ export default function ChartBox({ chart }: { chart: ChartSpec }) {
       <div className="flex justify-end px-1 pt-1">
         <button
           onClick={download}
-          className="rounded-md border border-cyan-400/30 px-2.5 py-1 text-xs text-accent-fg transition hover:bg-cyan-400/10"
+          className="rounded-md border border-edge px-2.5 py-1 text-xs text-accent-fg transition hover:bg-accent-soft"
         >
           下载图表 PNG
         </button>

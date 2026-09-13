@@ -21,7 +21,7 @@ export default function Landing({
   const [files, setFiles] = useState<File[]>([]);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
-  // textarea 随内容自适应高度（上限 max-h-72）
+  // textarea 随内容自适应高度(上限 max-h-72)
   useEffect(() => {
     const el = taRef.current;
     if (!el) return;
@@ -40,26 +40,24 @@ export default function Landing({
   };
 
   return (
-    <div className="relative flex h-screen flex-col">
+    <div className="relative flex min-h-0 flex-1 flex-col">
       {/* 中央内容 */}
       <div className="flex flex-1 flex-col items-center justify-center px-5 pb-10">
         <Logo className="h-14 w-14" />
-        <h1 className="mt-5 text-4xl font-bold">
-          <span className="text-gradient">数枢</span>
-        </h1>
-        <p className="mt-3 text-sm text-fg-muted">上传数据，用自然语言完成分析</p>
-        <p className="mt-2 font-mono text-[11px] tracking-[0.25em] text-fg-faint">
+        <h1 className="mt-5 text-3xl font-bold text-fg-strong">数枢</h1>
+        <p className="mt-2 text-sm text-fg-muted">上传数据,用自然语言完成分析</p>
+        <p className="mt-2 font-mono text-[11px] tracking-[0.2em] text-fg-faint">
           CSV · JSON · SQLITE · PDF · MP4
         </p>
 
         {/* 输入卡片 */}
-        <div className="mt-9 w-full max-w-3xl rounded-3xl border border-edge bg-panel/90 p-3 shadow-[0_4px_16px_rgba(0,0,0,0.15)] backdrop-blur-xl transition focus-within:border-cyan-400/50 focus-within:shadow-[0_0_24px_rgba(34,211,238,0.14)]">
+        <div className="mt-8 w-full max-w-3xl rounded-2xl border border-edge bg-panel/90 p-3 shadow-sm backdrop-blur-xl transition focus-within:border-accent/50">
           {files.length > 0 && (
             <div className="mb-2 flex flex-wrap gap-1.5">
               {files.map((f) => (
                 <span
                   key={f.name + f.size}
-                  className="flex items-center gap-1.5 rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 font-mono text-xs text-accent-fg"
+                  className="flex items-center gap-1.5 rounded-md border border-edge bg-accent-soft px-2.5 py-0.5 font-mono text-xs text-accent-fg"
                 >
                   {f.name}
                   <button
@@ -88,7 +86,7 @@ export default function Landing({
           <textarea
             ref={taRef}
             rows={2}
-            className="min-h-[100px] max-h-72 w-full resize-none bg-transparent px-0 py-2 text-base leading-relaxed placeholder:text-fg-faint focus:outline-none"
+            className="min-h-[100px] max-h-72 w-full resize-none bg-transparent px-0 py-2 text-[15px] leading-relaxed placeholder:text-fg-faint focus:outline-none"
             placeholder="输入你的分析问题…"
             value={input}
             disabled={busy}
@@ -104,15 +102,15 @@ export default function Landing({
             <label
               title="上传文件"
               aria-label="上传文件"
-              className={`flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border border-edge bg-ink/50 font-mono text-base transition ${
+              className={`flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md border border-edge bg-ink/50 font-mono text-base transition ${
                 busy
                   ? "cursor-not-allowed text-fg-faint"
-                  : "text-fg hover:border-cyan-400/40 hover:text-accent-fg"
+                  : "text-fg hover:border-accent/50 hover:text-accent-fg"
               }`}
             >
               <svg
-                width="16"
-                height="16"
+                width="15"
+                height="15"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -137,11 +135,11 @@ export default function Landing({
               disabled={busy || !input.trim()}
               title="发送 (Enter)"
               aria-label="发送"
-              className="btn-primary flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white disabled:opacity-35 disabled:shadow-none"
+              className="btn-primary flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white disabled:opacity-35"
             >
               <svg
-                width="16"
-                height="16"
+                width="15"
+                height="15"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -163,7 +161,7 @@ export default function Landing({
               key={s}
               onClick={() => setInput(s)}
               disabled={busy}
-              className="rounded-full border border-edge bg-panel/60 px-4 py-2 text-[13px] text-fg-muted backdrop-blur transition hover:border-cyan-400/40 hover:text-accent-fg"
+              className="rounded-full border border-edge bg-panel/60 px-4 py-1.5 text-[13px] text-fg-muted transition hover:border-accent/50 hover:text-accent-fg"
             >
               {s}
             </button>
@@ -171,7 +169,7 @@ export default function Landing({
         </div>
 
         {error && (
-          <p className="mt-5 font-mono text-sm text-danger-fg" role="alert">
+          <p className="mt-5 font-mono text-[13px] text-danger-fg" role="alert">
             ⚠ {error}
           </p>
         )}

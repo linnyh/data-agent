@@ -1,62 +1,62 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Space Grotesk", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
-    ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /* macOS 系统字体栈 */
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue",
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, "JetBrains Mono", Consolas, monospace;
 
-  /* 结构色（深色默认值，浅色在 .light 下翻转） */
-  --color-ink: #05070d;
-  --color-panel: #0a1122;
-  --color-edge: #1b2942;
+  /* 结构色(深色默认,浅色在 .light 下翻转;跟随 macOS 系统语义色) */
+  --color-ink: #1e1e20; /* 窗口底 */
+  --color-panel: #28282a; /* 面板/侧边栏 */
+  --color-edge: rgba(255, 255, 255, 0.1);
   /* 文本语义色 */
-  --color-fg: #dbe4f3;
-  --color-fg-strong: #e2e8f0;
-  --color-fg-muted: #94a3b8;
-  --color-fg-faint: #64748b;
-  /* 强调/警示文本 */
-  --color-accent-fg: #67e8f9;
-  --color-warn-fg: #fcd34d;
-  --color-warn-edge: rgba(251, 191, 36, 0.25);
-  --color-warn-soft: rgba(251, 191, 36, 0.08);
-  --color-danger-fg: #f87171;
-  /* 装饰网格线 */
-  --color-grid-line: rgba(56, 189, 248, 0.045);
+  --color-fg: #f5f5f7;
+  --color-fg-strong: #ffffff;
+  --color-fg-muted: #98989d;
+  --color-fg-faint: #6e6e73;
+  /* 强调/警示(macOS 系统蓝 / 系统橙) */
+  --color-accent: #0a84ff;
+  --color-accent-fg: #0a84ff;
+  --color-accent-soft: rgba(10, 132, 255, 0.15);
+  --color-warn-fg: #ff9f0a;
+  --color-warn-edge: rgba(255, 159, 10, 0.3);
+  --color-warn-soft: rgba(255, 159, 10, 0.08);
+  --color-danger-fg: #ff453a;
 
-  --animate-fade-up: fade-up 0.35s ease-out both;
+  --animate-fade-up: fade-up 0.25s ease-out both;
   --animate-blink: blink 1.1s step-end infinite;
-  --animate-scan: scan 1.6s linear infinite;
-  --animate-input-drop: input-drop 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
-  --animate-panel-in: panel-in 0.25s ease-out both;
+  --animate-panel-in: panel-in 0.2s ease-out both;
 }
 
-/* 深色为默认色域：修复原生滚动条/表单控件渲染（须在 .light 之前） */
+/* 深色为默认色域(须在 .light 之前) */
 :root {
   color-scheme: dark;
 }
 
-/* 浅色主题：只翻转变量，不动组件 */
+/* 浅色主题:只翻转变量 */
 .light {
   color-scheme: light;
-  --color-ink: #f4f6fa;
+  --color-ink: #f5f5f7;
   --color-panel: #ffffff;
-  --color-edge: #dbe3ef;
-  --color-fg: #1e293b;
-  --color-fg-strong: #0f172a;
-  --color-fg-muted: #475569;
-  --color-fg-faint: #64748b;
-  --color-accent-fg: #0e7490;
-  --color-warn-fg: #b45309;
-  --color-warn-edge: rgba(245, 158, 11, 0.45);
-  --color-warn-soft: #fffbeb;
-  --color-danger-fg: #dc2626;
-  --color-grid-line: rgba(15, 23, 42, 0.07);
+  --color-edge: rgba(0, 0, 0, 0.1);
+  --color-fg: #1d1d1f;
+  --color-fg-strong: #000000;
+  --color-fg-muted: #6e6e73;
+  --color-fg-faint: #98989d;
+  --color-accent: #007aff;
+  --color-accent-fg: #007aff;
+  --color-accent-soft: rgba(0, 122, 255, 0.1);
+  --color-warn-fg: #c93400;
+  --color-warn-edge: rgba(201, 52, 0, 0.3);
+  --color-warn-soft: rgba(201, 52, 0, 0.06);
+  --color-danger-fg: #ff3b30;
 }
 
 @keyframes fade-up {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
@@ -64,26 +64,10 @@
   }
 }
 
-/* 首页 → 聊天页：输入卡自视口中央落入底部（-40vh 近似中央到输入卡的距离） */
-@keyframes input-drop {
-  from {
-    opacity: 0;
-    transform: translateY(-40vh);
-  }
-  55% {
-    opacity: 1;
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-/* 会话历史卡片：淡入 + 轻微位移 */
 @keyframes panel-in {
   from {
     opacity: 0;
-    transform: translateX(-12px);
+    transform: translateX(-8px);
   }
   to {
     opacity: 1;
@@ -101,51 +85,34 @@
   }
 }
 
-@keyframes scan {
-  from {
-    transform: translateX(-100%);
-  }
-  to {
-    transform: translateX(320%);
-  }
-}
-
-@keyframes drift-a {
-  from {
-    transform: translate(0, 0);
-  }
-  to {
-    transform: translate(140px, 80px);
-  }
-}
-
-@keyframes drift-b {
-  from {
-    transform: translate(0, 0);
-  }
-  to {
-    transform: translate(-160px, -90px);
-  }
-}
-
+/* 窗口底:配合壳侧 underWindowBackground 毛玻璃,透出系统 vibrancy */
 body {
-  background: var(--color-ink);
+  background: transparent;
   color: var(--color-fg);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
 }
 
-/* 键盘焦点环：所有交互元素统一的可见焦点（文本输入元素用自身边框高亮，不叠加 outline） */
+input,
+textarea,
+pre,
+code,
+td,
+th {
+  user-select: text;
+}
+
+/* 键盘焦点环:系统强调色 */
 :focus-visible:not(textarea):not(input) {
-  outline: 2px solid var(--color-accent-fg);
+  outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
 
-/* 触控：消除双击缩放延迟 */
 button,
 label {
   touch-action: manipulation;
 }
 
-/* 尊重系统"减少动态效果"设置 */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -156,53 +123,10 @@ label {
   }
 }
 
-/* 透视网格 + 径向渐隐 */
-.bg-grid {
-  position: fixed;
-  inset: 0;
-  z-index: -2;
-  pointer-events: none;
-  background-image: linear-gradient(var(--color-grid-line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--color-grid-line) 1px, transparent 1px);
-  background-size: 44px 44px;
-  mask-image: radial-gradient(ellipse 100% 90% at 50% 10%, black 25%, transparent 78%);
-}
-
-/* 漂移光斑（浅色主题下隐藏：深色霓虹质感专用） */
-.orb {
-  position: fixed;
-  z-index: -1;
-  border-radius: 50%;
-  filter: blur(110px);
-  pointer-events: none;
-}
-
-.orb-a {
-  width: 520px;
-  height: 520px;
-  top: -180px;
-  left: 6%;
-  background: rgba(34, 211, 238, 0.14);
-  animation: drift-a 24s ease-in-out infinite alternate;
-}
-
-.orb-b {
-  width: 620px;
-  height: 620px;
-  right: 2%;
-  bottom: -240px;
-  background: rgba(139, 92, 246, 0.15);
-  animation: drift-b 28s ease-in-out infinite alternate;
-}
-
-.light .orb {
-  display: none;
-}
-
-/* 深色滚动条 */
+/* macOS overlay 滚动条:细、圆角、悬停加深 */
 ::-webkit-scrollbar {
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -210,86 +134,48 @@ label {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #14253f;
-  border-radius: 5px;
-  border: 2px solid var(--color-ink);
+  background: rgba(128, 128, 132, 0.45);
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #1e3a5f;
+  background: rgba(128, 128, 132, 0.7);
+}
+
+.light ::-webkit-scrollbar-thumb {
+  background: rgba(60, 60, 67, 0.3);
+}
+
+.light ::-webkit-scrollbar-thumb:hover {
+  background: rgba(60, 60, 67, 0.5);
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #14253f transparent;
-}
-
-.light ::-webkit-scrollbar-thumb {
-  background: #c3cedd;
-  border-color: var(--color-ink);
-}
-
-.light ::-webkit-scrollbar-thumb:hover {
-  background: #a9b8cc;
-}
-
-.light * {
-  scrollbar-color: #c3cedd transparent;
+  scrollbar-color: rgba(128, 128, 132, 0.45) transparent;
 }
 
 ::selection {
-  background: rgba(34, 211, 238, 0.28);
+  background: var(--color-accent-soft);
 }
 
-/* 青→紫渐变文字 */
-.text-gradient {
-  background: linear-gradient(100deg, #22d3ee 10%, #60a5fa 55%, #a78bfa 90%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-
-/* 主按钮：青蓝紫渐变 + 霓虹光晕 */
+/* 主按钮:系统强调色 */
 .btn-primary {
-  background: linear-gradient(120deg, #06b6d4, #3b82f6 60%, #7c3aed);
-  box-shadow: 0 0 18px rgba(34, 211, 238, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.18);
-  transition: box-shadow 0.25s ease, filter 0.25s ease;
+  background: var(--color-accent);
+  transition: filter 0.15s ease;
 }
 
 .btn-primary:hover:not(:disabled) {
-  box-shadow: 0 0 28px rgba(34, 211, 238, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.22);
   filter: brightness(1.08);
 }
 
-/* 浅色下霓虹光晕降档 */
-.light .btn-primary {
-  box-shadow: 0 0 12px rgba(34, 211, 238, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+/* Overlay 标题栏拖拽区 */
+.drag-region {
+  -webkit-app-region: drag;
 }
 
-.light .btn-primary:hover:not(:disabled) {
-  box-shadow: 0 0 18px rgba(34, 211, 238, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.22);
-}
-
-/* 浅色下渐变文字加深保证可读性 */
-.light .text-gradient {
-  background-image: linear-gradient(100deg, #0891b2 10%, #2563eb 55%, #7c3aed 90%);
-}
-
-/* 扫描线（思考指示器内） */
-.scanline {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  border-radius: inherit;
-  pointer-events: none;
-}
-
-.scanline::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 45%;
-  background: linear-gradient(90deg, transparent, rgba(34, 211, 238, 0.4), transparent);
-  animation: scan 1.6s linear infinite;
+.drag-region button,
+.drag-region input,
+.drag-region a {
+  -webkit-app-region: no-drag;
 }
